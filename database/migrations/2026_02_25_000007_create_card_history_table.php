@@ -1,0 +1,27 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('card_history', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->foreignUuid('card_id')->constrained('rfid_cards')->cascadeOnDelete();
+            $table->enum('action', ['assigned', 'unassigned', 'activated', 'deactivated', 'blocked']);
+            $table->string('performed_by');
+            $table->string('details')->nullable();
+            $table->timestamps();
+
+            $table->index('card_id');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('card_history');
+    }
+};
