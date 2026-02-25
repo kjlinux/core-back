@@ -21,6 +21,29 @@ class MqttListenRfidCommand extends Command
     {
         $this->info('Connexion au broker MQTT pour les capteurs RFID...');
 
+        while (true) {
+            try {
+                $this->connectAndListen();
+            } catch (\PhpMqtt\Client\Exceptions\DataTransferException $e) {
+                $this->error("Connexion perdue: {$e->getMessage()}");
+                $this->info('Reconnexion dans 5 secondes...');
+                sleep(5);
+            } catch (\PhpMqtt\Client\Exceptions\ConnectingToBrokerFailedException $e) {
+                $this->error("Echec de connexion: {$e->getMessage()}");
+                $this->info('Nouvelle tentative dans 10 secondes...');
+                sleep(10);
+            } catch (\Exception $e) {
+                $this->error("Erreur inattendue: {$e->getMessage()}");
+                $this->info('Reconnexion dans 10 secondes...');
+                sleep(10);
+            }
+        }
+
+        return self::SUCCESS;
+    }
+
+    private function connectAndListen(): void
+    {
         $host = config('mqtt.host');
         $port = (int) config('mqtt.port', 8883);
         $clientId = config('mqtt.client_id', 'core-api') . '-rfid-' . uniqid();
@@ -28,7 +51,7 @@ class MqttListenRfidCommand extends Command
         $this->mqtt = new MqttClient($host, $port, $clientId, MqttClient::MQTT_3_1_1);
 
         $connectionSettings = (new ConnectionSettings)
-            ->setKeepAliveInterval(10)
+            ->setKeepAliveInterval(60)
             ->setConnectTimeout(30);
 
         if (config('mqtt.auth.enabled')) {
@@ -61,8 +84,6 @@ class MqttListenRfidCommand extends Command
         }, MqttClient::QOS_AT_LEAST_ONCE);
 
         $this->mqtt->loop(true);
-
-        return self::SUCCESS;
     }
 
     private function processMessage(string $topic, string $message): void

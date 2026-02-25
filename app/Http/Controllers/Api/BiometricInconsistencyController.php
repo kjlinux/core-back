@@ -15,12 +15,16 @@ class BiometricInconsistencyController extends BaseApiController
         $doubleBadgeIds = AttendanceRecord::where('is_double_badge', true)
             ->pluck('id');
 
-        $duplicateIds = AttendanceRecord::select('id')
-            ->whereIn(
-                DB::raw('CONCAT(employee_id, "-", date)'),
-                AttendanceRecord::select(DB::raw('CONCAT(employee_id, "-", date)'))
+        $duplicateIds = AttendanceRecord::select('attendance_records.id')
+            ->joinSub(
+                AttendanceRecord::select('employee_id', 'date')
                     ->groupBy('employee_id', 'date')
-                    ->havingRaw('COUNT(*) > 1')
+                    ->havingRaw('COUNT(*) > 1'),
+                'duplicates',
+                function ($join) {
+                    $join->on('attendance_records.employee_id', '=', 'duplicates.employee_id')
+                        ->on('attendance_records.date', '=', 'duplicates.date');
+                }
             )
             ->pluck('id');
 

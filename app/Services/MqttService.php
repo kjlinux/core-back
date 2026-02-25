@@ -16,7 +16,7 @@ class MqttService
         $mqtt = new MqttClient($host, $port, $clientId, MqttClient::MQTT_3_1_1);
 
         $connectionSettings = (new ConnectionSettings)
-            ->setKeepAliveInterval(10)
+            ->setKeepAliveInterval(60)
             ->setConnectTimeout(30);
 
         if (config('mqtt.auth.enabled')) {
