@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Requests\Mqtt\SendMqttCommandRequest;
 use App\Http\Requests\Mqtt\TestMqttRequest;
 use App\Models\BiometricDevice;
-use App\Models\FeelbackDevice;
+use App\Models\RfidDevice;
 use App\Services\MqttService;
 use Illuminate\Http\JsonResponse;
 
@@ -38,10 +38,10 @@ class MqttController extends BaseApiController
         if ($deviceType === 'biometric') {
             $device = BiometricDevice::findOrFail($deviceId);
         } else {
-            $device = FeelbackDevice::findOrFail($deviceId);
+            $device = RfidDevice::findOrFail($deviceId);
         }
 
-        $commandCode = config('mqtt.command_codes.' . $data['command'], $data['command']);
+        $commandCode = config("mqtt.command_codes.{$deviceType}.{$data['command']}", $data['command']);
 
         $responseTopic = $mqtt->getResponseTopic($device->mqtt_topic);
 

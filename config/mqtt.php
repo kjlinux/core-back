@@ -17,14 +17,25 @@ return [
         'feelback' => 'core/feelback/sensor',
     ],
     'response_codes' => [
-        'accepted' => '0x001021J',
-        'refused' => '0x0030212',
-        'rejected' => '0x1080814',
+        'accepted' => '0x001020',
+        'refused'  => '0x003020',
+        'rejected' => '0x108080',
     ],
     'command_codes' => [
-        'REBOOT' => '0x108091S',
-        'RESET' => '0x1080713',
-        'STATUS' => '0x1000119',
-        'RESTART' => '0x108091R',
+        'rfid' => [
+            'RESET'   => '0x108070',
+            'REBOOT'  => '0x108090',
+            'WAKE_UP' => '0x1080A0',
+            'SLEEP'   => '0x1080B0',
+            'STATUS'  => '0x100010',
+        ],
+        'biometric' => [
+            'RESET'   => '0x108070',
+            'REBOOT'  => '0x108090',
+            'WAKE_UP' => '0x1080A0',
+            'SLEEP'   => '0x1080B0',
+            'STATUS'  => '0x100010',
+            'ENROLE'  => '0x100200',
+        ],
     ],
 ];

@@ -62,4 +62,12 @@ class ProductController extends BaseApiController
 
         return $this->resourceResponse(new ProductResource($product));
     }
+
+    public function destroy(string $id): JsonResponse
+    {
+        $product = Product::findOrFail($id);
+        $product->delete();
+
+        return $this->noContentResponse();
+    }
 }

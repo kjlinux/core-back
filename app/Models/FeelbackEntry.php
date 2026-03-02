@@ -14,8 +14,6 @@ class FeelbackEntry extends Model
         'device_id',
         'level',
         'site_id',
-        'agent_id',
-        'agent_name',
     ];
 
     public function device(): BelongsTo

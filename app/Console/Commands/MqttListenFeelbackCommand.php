@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Events\DeviceStatusUpdated;
 use App\Events\FeelbackReceived;
 use App\Models\FeelbackAlert;
 use App\Models\FeelbackDevice;
@@ -116,11 +115,9 @@ class MqttListenFeelbackCommand extends Command
         }
 
         // Update device status
-        $batteryLevel = $data['battery'] ?? $device->battery_level;
         $device->update([
             'is_online' => true,
             'last_ping_at' => now(),
-            'battery_level' => $batteryLevel,
         ]);
 
         // Create feelback entry
@@ -128,8 +125,6 @@ class MqttListenFeelbackCommand extends Command
             'device_id' => $device->id,
             'level' => $level,
             'site_id' => $device->site_id,
-            'agent_id' => $device->assigned_agent ? $device->id : null,
-            'agent_name' => $device->assigned_agent,
         ]);
 
         $this->info("Feelback enregistre: {$level} depuis {$serialNumber}");
@@ -157,26 +152,6 @@ class MqttListenFeelbackCommand extends Command
                     'current_value' => $mauvaisCount,
                 ]);
                 $this->warn("Alerte seuil: {$mauvaisCount} avis mauvais en 1h");
-            }
-        }
-
-        // Low battery alert
-        if ($batteryLevel < 20) {
-            $existingBatteryAlert = FeelbackAlert::where('device_id', $device->id)
-                ->where('type', 'low_battery')
-                ->where('created_at', '>=', now()->subDay())
-                ->first();
-
-            if (!$existingBatteryAlert) {
-                FeelbackAlert::create([
-                    'device_id' => $device->id,
-                    'site_id' => $device->site_id,
-                    'type' => 'low_battery',
-                    'message' => "Batterie faible: {$batteryLevel}%",
-                    'current_value' => $batteryLevel,
-                ]);
-                $this->warn("Alerte batterie faible: {$batteryLevel}%");
-                event(new DeviceStatusUpdated('feelback', (string) $device->id, 'low_battery', ['battery' => $batteryLevel]));
             }
         }
 

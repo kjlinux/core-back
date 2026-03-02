@@ -3,8 +3,10 @@
 namespace App\Console\Commands;
 
 use App\Events\AttendanceRecorded;
+use App\Events\DeviceStatusUpdated;
 use App\Models\AttendanceRecord;
 use App\Models\RfidCard;
+use App\Models\RfidDevice;
 use App\Models\Schedule;
 use Illuminate\Console\Command;
 use PhpMqtt\Client\ConnectionSettings;
@@ -98,6 +100,17 @@ class MqttListenRfidCommand extends Command
 
         $parts = explode('/', $topic);
         $uniqueId = $parts[3] ?? null;
+
+        // Update device online status
+        $device = RfidDevice::where('serial_number', $uniqueId)->first();
+        if ($device) {
+            $device->update([
+                'is_online' => true,
+                'last_ping_at' => now(),
+            ]);
+            event(new DeviceStatusUpdated('rfid', (string) $device->id, 'online', $data));
+        }
+
         $cardUid = $data['card_uid'];
 
         $responseTopic = str_replace('/event', '/response', $topic);

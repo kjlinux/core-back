@@ -8,9 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('feelback_devices', function (Blueprint $table) {
+        Schema::create('rfid_devices', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->string('serial_number')->unique();
+            $table->string('name');
             $table->foreignUuid('company_id')->constrained('companies')->cascadeOnDelete();
             $table->foreignUuid('site_id')->constrained('sites')->cascadeOnDelete();
             $table->boolean('is_online')->default(false);
@@ -25,6 +26,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('feelback_devices');
+        Schema::dropIfExists('rfid_devices');
     }
 };

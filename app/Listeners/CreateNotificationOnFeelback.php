@@ -24,7 +24,7 @@ class CreateNotificationOnFeelback implements ShouldHandleEventsAfterCommit
         $siteName = $entry->site->name ?? '';
 
         $title = "Feelback - {$levelLabel}";
-        $message = "{$siteName} - {$entry->agent_name}: {$levelLabel}";
+        $message = "{$siteName}: {$levelLabel}";
 
         // Only notify on 'mauvais' feedback to avoid noise
         if ($entry->level !== 'mauvais') {

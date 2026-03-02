@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             EmployeeSeeder::class,
             RfidCardSeeder::class,
+            RfidDeviceSeeder::class,
             ScheduleSeeder::class,
             BiometricDeviceSeeder::class,
             FeelbackDeviceSeeder::class,

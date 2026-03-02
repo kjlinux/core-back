@@ -41,7 +41,6 @@ class FeelbackReceived implements ShouldBroadcastNow
             'deviceId' => (string) $this->entry->device_id,
             'level' => $this->entry->level,
             'siteName' => $this->entry->site->name ?? '',
-            'agentName' => $this->entry->agent_name ?? '',
             'timestamp' => $this->entry->created_at->toISOString(),
         ];
     }

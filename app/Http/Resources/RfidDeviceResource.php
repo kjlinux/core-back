@@ -5,7 +5,7 @@ namespace App\Http\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-class FeelbackDeviceResource extends JsonResource
+class RfidDeviceResource extends JsonResource
 {
     /**
      * Transform the resource into an array.
@@ -17,6 +17,7 @@ class FeelbackDeviceResource extends JsonResource
         return [
             'id' => (string) $this->id,
             'serialNumber' => $this->serial_number,
+            'name' => $this->name,
             'companyId' => (string) $this->company_id,
             'siteId' => (string) $this->site_id,
             'siteName' => $this->when(

@@ -13,10 +13,13 @@ class SendMqttCommandRequest extends FormRequest
 
     public function rules(): array
     {
+        $deviceType = $this->input('device_type');
+        $allowedCommands = array_keys(config("mqtt.command_codes.{$deviceType}", []));
+
         return [
-            'device_type' => ['required', 'in:rfid,biometric,feelback'],
+            'device_type' => ['required', 'in:rfid,biometric'],
             'device_id' => ['required', 'string'],
-            'command' => ['required', 'in:REBOOT,RESET,STATUS,RESTART'],
+            'command' => ['required', 'in:' . implode(',', $allowedCommands)],
         ];
     }
 }

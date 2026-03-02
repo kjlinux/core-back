@@ -24,8 +24,6 @@ class FeelbackEntryResource extends JsonResource
                 $this->relationLoaded('site'),
                 fn () => $this->site?->name
             ),
-            'agentId' => (string) $this->agent_id,
-            'agentName' => $this->agent_name,
         ];
     }
 }

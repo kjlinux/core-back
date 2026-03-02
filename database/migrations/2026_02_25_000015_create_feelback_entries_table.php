@@ -13,8 +13,6 @@ return new class extends Migration
             $table->foreignUuid('device_id')->constrained('feelback_devices')->cascadeOnDelete();
             $table->enum('level', ['bon', 'neutre', 'mauvais']);
             $table->foreignUuid('site_id')->constrained('sites')->cascadeOnDelete();
-            $table->string('agent_id')->nullable();
-            $table->string('agent_name')->nullable();
             $table->timestamps();
 
             $table->index('level');

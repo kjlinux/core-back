@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Http\Requests\Feelback;
+namespace App\Http\Requests\Rfid;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class UpdateFeelbackDeviceRequest extends FormRequest
+class UpdateRfidDeviceRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -15,7 +15,8 @@ class UpdateFeelbackDeviceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'serial_number' => ['sometimes', 'string', Rule::unique('feelback_devices')->ignore($this->route('feelback_device'))],
+            'serial_number' => ['sometimes', 'string', Rule::unique('rfid_devices')->ignore($this->route('id'))],
+            'name' => ['sometimes', 'string', 'max:255'],
             'company_id' => ['sometimes', 'exists:companies,id'],
             'site_id' => ['sometimes', 'exists:sites,id'],
         ];

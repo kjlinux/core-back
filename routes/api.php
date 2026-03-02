@@ -24,10 +24,16 @@ use App\Http\Controllers\Api\AdminOrderController;
 use App\Http\Controllers\Api\PaymentCallbackController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\RfidDeviceController;
 use App\Http\Controllers\Api\MqttController;
+use App\Http\Controllers\Api\ForgotPasswordController;
+use App\Http\Controllers\Api\AdminSalesReportController;
+use App\Http\Controllers\Api\AttendanceReportController;
+use App\Http\Controllers\Api\FeelbackReportController;
 
 // Public routes
 Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/auth/forgot-password', ForgotPasswordController::class);
 Route::post('/payment/callback', [PaymentCallbackController::class, 'handle']);
 
 // Authenticated routes
@@ -69,6 +75,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/employees/{id}', [EmployeeController::class, 'destroy']);
     Route::patch('/employees/{id}/toggle-active', [EmployeeController::class, 'toggleActive']);
 
+    // RFID Devices
+    Route::get('/rfid/devices', [RfidDeviceController::class, 'index']);
+    Route::post('/rfid/devices', [RfidDeviceController::class, 'store']);
+    Route::get('/rfid/devices/{id}', [RfidDeviceController::class, 'show']);
+    Route::put('/rfid/devices/{id}', [RfidDeviceController::class, 'update']);
+    Route::delete('/rfid/devices/{id}', [RfidDeviceController::class, 'destroy']);
+
     // RFID Cards
     Route::get('/cards', [CardController::class, 'index']);
     Route::post('/cards', [CardController::class, 'store']);
@@ -99,6 +112,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/attendance/department/{departmentId}', [AttendanceController::class, 'byDepartment']);
     Route::get('/attendance/summary', [AttendanceController::class, 'summary']);
     Route::get('/attendance/biometric', [AttendanceController::class, 'biometric']);
+    Route::get('/attendance/reports', [AttendanceReportController::class, 'index']);
 
     // Biometric
     Route::get('/biometric/devices', [BiometricDeviceController::class, 'index']);
@@ -120,17 +134,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/feelback/devices/{id}', [FeelbackDeviceController::class, 'show']);
     Route::put('/feelback/devices/{id}', [FeelbackDeviceController::class, 'update']);
     Route::delete('/feelback/devices/{id}', [FeelbackDeviceController::class, 'destroy']);
-    Route::post('/feelback/devices/{id}/restart', [FeelbackDeviceController::class, 'restart']);
     Route::get('/feelback/alerts', [FeelbackAlertController::class, 'index']);
     Route::put('/feelback/alerts/settings', [FeelbackAlertController::class, 'updateSettings']);
     Route::get('/feelback/stats/agency/{agencyId}', [FeelbackStatsController::class, 'byAgency']);
     Route::get('/feelback/comparison', [FeelbackStatsController::class, 'comparison']);
+    Route::get('/feelback/reports', [FeelbackReportController::class, 'index']);
 
     // Marketplace
     Route::get('/marketplace/products', [ProductController::class, 'index']);
     Route::post('/marketplace/products', [ProductController::class, 'store']);
     Route::get('/marketplace/products/{id}', [ProductController::class, 'show']);
     Route::put('/marketplace/products/{id}', [ProductController::class, 'update']);
+    Route::delete('/marketplace/products/{id}', [ProductController::class, 'destroy']);
     Route::patch('/marketplace/products/{id}/stock', [ProductController::class, 'updateStock']);
 
     // Orders
@@ -140,9 +155,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/orders/{id}/cancel', [OrderController::class, 'cancel']);
     Route::post('/orders/{id}/payment', [OrderController::class, 'initiatePayment']);
 
-    // Admin Orders (super_admin only)
+    // Admin (super_admin only)
     Route::middleware('role:super_admin')->group(function () {
         Route::get('/admin/orders', [AdminOrderController::class, 'index']);
+        Route::get('/admin/reports/sales', [AdminSalesReportController::class, 'index']);
     });
 
     // Dashboard

@@ -20,9 +20,9 @@ class FeelbackEntrySeeder extends Seeder
         $s3 = '22222222-2222-2222-2222-222222222203';
 
         $devices = [
-            ['id' => $fb1, 'site_id' => $s1, 'agent' => 'Jean Compaore'],
-            ['id' => $fb2, 'site_id' => $s2, 'agent' => 'Marie Zongo'],
-            ['id' => $fb3, 'site_id' => $s3, 'agent' => null],
+            ['id' => $fb1, 'site_id' => $s1],
+            ['id' => $fb2, 'site_id' => $s2],
+            ['id' => $fb3, 'site_id' => $s3],
         ];
 
         $levels = ['bon', 'bon', 'bon', 'bon', 'bon', 'bon', 'bon', 'neutre', 'neutre', 'mauvais'];
@@ -38,8 +38,6 @@ class FeelbackEntrySeeder extends Seeder
                 'device_id' => $device['id'],
                 'level' => $level,
                 'site_id' => $device['site_id'],
-                'agent_id' => $device['agent'] ? $device['id'] : null,
-                'agent_name' => $device['agent'],
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
             ];

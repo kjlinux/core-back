@@ -12,7 +12,7 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignUuid('device_id')->constrained('feelback_devices')->cascadeOnDelete();
             $table->foreignUuid('site_id')->constrained('sites')->cascadeOnDelete();
-            $table->enum('type', ['threshold_exceeded', 'device_offline', 'low_battery']);
+            $table->enum('type', ['threshold_exceeded', 'device_offline']);
             $table->string('message');
             $table->integer('threshold')->nullable();
             $table->integer('current_value')->nullable();

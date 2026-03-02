@@ -6,7 +6,6 @@ use App\Http\Requests\Feelback\StoreFeelbackDeviceRequest;
 use App\Http\Requests\Feelback\UpdateFeelbackDeviceRequest;
 use App\Http\Resources\FeelbackDeviceResource;
 use App\Models\FeelbackDevice;
-use App\Services\MqttService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -64,24 +63,5 @@ class FeelbackDeviceController extends BaseApiController
         $device->delete();
 
         return $this->noContentResponse();
-    }
-
-    public function restart(string $id, MqttService $mqtt): JsonResponse
-    {
-        $device = FeelbackDevice::findOrFail($id);
-
-        $responseTopic = $mqtt->getResponseTopic($device->mqtt_topic);
-        $command = json_encode([
-            'command' => 'RESTART',
-            'device_id' => $device->id,
-            'timestamp' => now()->toISOString(),
-        ]);
-
-        $mqtt->publish($responseTopic, $command);
-
-        return $this->successResponse(
-            new FeelbackDeviceResource($device),
-            'Redemarrage lance'
-        );
     }
 }

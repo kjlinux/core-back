@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Http\Requests\Feelback;
+namespace App\Http\Requests\Rfid;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class StoreFeelbackDeviceRequest extends FormRequest
+class StoreRfidDeviceRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -14,7 +14,8 @@ class StoreFeelbackDeviceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'serial_number' => ['required', 'string', 'unique:feelback_devices'],
+            'serial_number' => ['required', 'string', 'unique:rfid_devices'],
+            'name' => ['required', 'string', 'max:255'],
             'company_id' => ['required', 'exists:companies,id'],
             'site_id' => ['required', 'exists:sites,id'],
         ];
