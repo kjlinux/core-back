@@ -18,6 +18,7 @@ class UpdateFeelbackDeviceRequest extends FormRequest
             'serial_number' => ['sometimes', 'string', Rule::unique('feelback_devices')->ignore($this->route('feelback_device'))],
             'company_id' => ['sometimes', 'exists:companies,id'],
             'site_id' => ['sometimes', 'exists:sites,id'],
+            'is_online' => ['sometimes', 'boolean'],
         ];
     }
 }

@@ -18,15 +18,13 @@ class DepartmentController extends BaseApiController
     {
         $query = Department::withCount('employees');
 
-        $query->when($request->input('company_id'), function ($q, $companyId) {
-            $q->where('company_id', $companyId);
-        });
+        $this->scopeByCompany($query);
 
         $query->when($request->input('site_id'), function ($q, $siteId) {
             $q->where('site_id', $siteId);
         });
 
-        $perPage = $request->input('perPage', 15);
+        $perPage = $request->input('per_page', 15);
         $departments = $query->paginate($perPage);
 
         return $this->paginatedResponse(DepartmentResource::collection($departments));
@@ -47,7 +45,8 @@ class DepartmentController extends BaseApiController
      */
     public function store(StoreDepartmentRequest $request): JsonResponse
     {
-        $department = Department::create($request->validated());
+        $data = $this->enforceCompanyId($request->validated());
+        $department = Department::create($data);
 
         return $this->resourceResponse(new DepartmentResource($department), 'Departement cree avec succes', 201);
     }

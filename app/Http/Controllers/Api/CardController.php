@@ -22,9 +22,7 @@ class CardController extends BaseApiController
     {
         $query = RfidCard::with('employee');
 
-        $query->when($request->input('company_id'), function ($q, $companyId) {
-            $q->where('company_id', $companyId);
-        });
+        $this->scopeByCompany($query);
 
         $query->when($request->input('status'), function ($q, $status) {
             $q->where('status', $status);
@@ -50,7 +48,7 @@ class CardController extends BaseApiController
      */
     public function store(StoreCardRequest $request): JsonResponse
     {
-        $data = $request->validated();
+        $data = $this->enforceCompanyId($request->validated());
         $data['status'] = 'inactive';
 
         $card = RfidCard::create($data);
@@ -72,7 +70,7 @@ class CardController extends BaseApiController
         ]);
 
         CardHistory::create([
-            'rfid_card_id' => $card->id,
+            'card_id' => $card->id,
             'action' => 'assigned',
             'performed_by' => Auth::user()->name,
             'details' => 'Carte assignee a l\'employe #' . $request->input('employee_id'),
@@ -99,7 +97,7 @@ class CardController extends BaseApiController
         ]);
 
         CardHistory::create([
-            'rfid_card_id' => $card->id,
+            'card_id' => $card->id,
             'action' => 'unassigned',
             'performed_by' => Auth::user()->name,
             'details' => 'Carte desassignee de l\'employe #' . $previousEmployeeId,
@@ -122,7 +120,7 @@ class CardController extends BaseApiController
         ]);
 
         CardHistory::create([
-            'rfid_card_id' => $card->id,
+            'card_id' => $card->id,
             'action' => 'blocked',
             'performed_by' => Auth::user()->name,
             'details' => 'Carte bloquee. Raison: ' . $request->input('block_reason'),
@@ -145,7 +143,7 @@ class CardController extends BaseApiController
         ]);
 
         CardHistory::create([
-            'rfid_card_id' => $card->id,
+            'card_id' => $card->id,
             'action' => 'activated',
             'performed_by' => Auth::user()->name,
             'details' => 'Carte debloquee et reactivee',

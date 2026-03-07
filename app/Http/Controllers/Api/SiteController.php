@@ -19,11 +19,9 @@ class SiteController extends BaseApiController
     {
         $query = Site::with('departments');
 
-        $query->when($request->input('company_id'), function ($q, $companyId) {
-            $q->where('company_id', $companyId);
-        });
+        $this->scopeByCompany($query);
 
-        $perPage = $request->input('perPage', 15);
+        $perPage = $request->input('per_page', 15);
         $sites = $query->paginate($perPage);
 
         return $this->paginatedResponse(SiteResource::collection($sites));
@@ -44,7 +42,8 @@ class SiteController extends BaseApiController
      */
     public function store(StoreSiteRequest $request): JsonResponse
     {
-        $site = Site::create($request->validated());
+        $data = $this->enforceCompanyId($request->validated());
+        $site = Site::create($data);
 
         return $this->resourceResponse(new SiteResource($site), 'Site cree avec succes', 201);
     }

@@ -13,8 +13,10 @@ class StoreOrderRequest extends FormRequest
 
     public function rules(): array
     {
+        $isSuperAdmin = $this->user()?->role === 'super_admin';
+
         return [
-            'company_id' => ['required', 'exists:companies,id'],
+            'company_id' => [$isSuperAdmin ? 'required' : 'nullable', 'exists:companies,id'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:products,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],

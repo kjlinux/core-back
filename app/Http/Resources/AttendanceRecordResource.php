@@ -14,15 +14,17 @@ class AttendanceRecordResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $employee = $this->relationLoaded('employee') ? $this->employee : null;
+
         return [
             'id' => (string) $this->id,
             'employeeId' => (string) $this->employee_id,
-            'employeeName' => $this->when(
-                $this->relationLoaded('employee'),
-                fn () => $this->employee
-                    ? $this->employee->first_name . ' ' . $this->employee->last_name
-                    : null
-            ),
+            'employeeName' => $employee
+                ? $employee->first_name . ' ' . $employee->last_name
+                : null,
+            'department' => $employee && $employee->relationLoaded('department') && $employee->department
+                ? $employee->department->name
+                : null,
             'date' => $this->date,
             'entryTime' => $this->entry_time?->toISOString(),
             'exitTime' => $this->exit_time?->toISOString(),

@@ -13,7 +13,7 @@ class AuthController extends BaseApiController
 {
     public function login(LoginRequest $request): JsonResponse
     {
-        $user = User::where('email', $request->email)->first();
+        $user = User::with('company')->where('email', $request->email)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             return $this->errorResponse('Identifiants incorrects', 401);
@@ -42,7 +42,7 @@ class AuthController extends BaseApiController
 
     public function refresh(Request $request): JsonResponse
     {
-        $user = $request->user();
+        $user = $request->user()->load('company');
         $user->currentAccessToken()->delete();
 
         $accessToken = $user->createToken('access_token')->plainTextToken;
@@ -57,6 +57,6 @@ class AuthController extends BaseApiController
 
     public function me(Request $request): JsonResponse
     {
-        return $this->resourceResponse(new UserResource($request->user()));
+        return $this->resourceResponse(new UserResource($request->user()->load('company')));
     }
 }

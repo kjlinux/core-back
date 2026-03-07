@@ -18,11 +18,9 @@ class HolidayController extends BaseApiController
     {
         $query = Holiday::query();
 
-        $query->when($request->input('company_id'), function ($q, $companyId) {
-            $q->where('company_id', $companyId);
-        });
+        $this->scopeByCompany($query);
 
-        $perPage = $request->input('perPage', 15);
+        $perPage = $request->input('per_page', 15);
         $holidays = $query->paginate($perPage);
 
         return $this->paginatedResponse(HolidayResource::collection($holidays));
@@ -33,7 +31,8 @@ class HolidayController extends BaseApiController
      */
     public function store(StoreHolidayRequest $request): JsonResponse
     {
-        $holiday = Holiday::create($request->validated());
+        $data = $this->enforceCompanyId($request->validated());
+        $holiday = Holiday::create($data);
 
         return $this->resourceResponse(new HolidayResource($holiday), 'Jour ferie cree avec succes', 201);
     }

@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Requests\Biometric\StoreEnrollmentRequest;
 use App\Http\Resources\FingerprintEnrollmentResource;
 use App\Models\BiometricAuditLog;
+use App\Models\BiometricDevice;
 use App\Models\Employee;
 use App\Models\FingerprintEnrollment;
+use App\Services\MqttService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -15,6 +17,13 @@ class EnrollmentController extends BaseApiController
     public function index(Request $request): JsonResponse
     {
         $query = FingerprintEnrollment::with('employee');
+
+        $user = $request->user();
+        if (!$user->isSuperAdmin()) {
+            $query->whereHas('employee', function ($q) use ($user) {
+                $q->where('company_id', $user->company_id);
+            });
+        }
 
         if ($request->filled('device_id')) {
             $query->where('device_id', $request->device_id);
@@ -29,9 +38,16 @@ class EnrollmentController extends BaseApiController
         return $this->paginatedResponse(FingerprintEnrollmentResource::collection($enrollments));
     }
 
+    public function show(string $id): JsonResponse
+    {
+        $enrollment = FingerprintEnrollment::with('employee')->findOrFail($id);
+
+        return $this->resourceResponse(new FingerprintEnrollmentResource($enrollment));
+    }
+
     public function store(StoreEnrollmentRequest $request): JsonResponse
     {
-        $data = $request->validated();
+        $data = $this->enforceCompanyId($request->validated());
         $data['status'] = 'pending';
 
         $enrollment = FingerprintEnrollment::create($data);
@@ -50,6 +66,66 @@ class EnrollmentController extends BaseApiController
         ]);
 
         return $this->resourceResponse(new FingerprintEnrollmentResource($enrollment), '', 201);
+    }
+
+    public function enroll(Request $request, MqttService $mqtt): JsonResponse
+    {
+        $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'device_id' => ['required', 'exists:biometric_devices,id'],
+        ]);
+
+        $device = BiometricDevice::findOrFail($request->device_id);
+        $employee = Employee::findOrFail($request->employee_id);
+
+        if (!$device->mqtt_topic) {
+            return $this->errorResponse('Le terminal n\'a pas de topic MQTT configure', 422);
+        }
+
+        if (!$device->is_online) {
+            return $this->errorResponse('Le terminal est hors ligne', 422);
+        }
+
+        $enrollment = FingerprintEnrollment::create([
+            'employee_id' => $employee->id,
+            'device_id' => $device->id,
+            'status' => 'pending',
+            'template_hash' => '',
+        ]);
+
+        $responseTopic = $mqtt->getResponseTopic($device->mqtt_topic);
+        $commandCode = config('mqtt.command_codes.biometric.ENROLE', 'ENROLE');
+
+        $payload = json_encode([
+            'command' => $commandCode,
+            'device_id' => $device->id,
+            'device_type' => 'biometric',
+            'enrollment_id' => $enrollment->id,
+            'employee_id' => $employee->id,
+            'timestamp' => now()->toISOString(),
+        ]);
+
+        try {
+            $mqtt->publish($responseTopic, $payload);
+
+            BiometricAuditLog::create([
+                'user_id' => $request->user()->id,
+                'user_name' => $request->user()->name,
+                'action' => 'enrollment_started',
+                'target' => $employee->full_name,
+                'details' => 'Commande ENROLE envoyee au terminal ' . $device->serial_number . ' pour ' . $employee->full_name,
+            ]);
+
+            return $this->resourceResponse(
+                new FingerprintEnrollmentResource($enrollment->load('employee')),
+                'Commande d\'enrolement envoyee au terminal',
+                201
+            );
+        } catch (\Exception $e) {
+            $enrollment->update(['status' => 'failed']);
+
+            return $this->errorResponse('Echec d\'envoi de la commande ENROLE: ' . $e->getMessage(), 500);
+        }
     }
 
     public function destroy(Request $request, string $id): JsonResponse

@@ -5,7 +5,9 @@ namespace App\Console\Commands;
 use App\Events\AttendanceRecorded;
 use App\Events\DeviceStatusUpdated;
 use App\Models\AttendanceRecord;
+use App\Models\BiometricAuditLog;
 use App\Models\BiometricDevice;
+use App\Models\Employee;
 use App\Models\FingerprintEnrollment;
 use App\Models\Schedule;
 use Illuminate\Console\Command;
@@ -120,6 +122,12 @@ class MqttListenBiometricCommand extends Command
             return;
         }
 
+        // Handle enrollment response from device
+        if (isset($data['action']) && $data['action'] === 'enrollment_result') {
+            $this->processEnrollmentResult($data, $responseTopic);
+            return;
+        }
+
         // Handle fingerprint scan
         $templateHash = $data['template_hash'] ?? null;
         if (!$templateHash) {
@@ -222,5 +230,64 @@ class MqttListenBiometricCommand extends Command
 
         $this->mqtt->publish($responseTopic, config('mqtt.response_codes.accepted'), MqttClient::QOS_AT_LEAST_ONCE);
         $this->info("Presence biometrique enregistree pour {$employee->full_name}");
+    }
+
+    private function processEnrollmentResult(array $data, string $responseTopic): void
+    {
+        $enrollmentId = $data['enrollment_id'] ?? null;
+        $templateHash = $data['template_hash'] ?? null;
+        $success = $data['success'] ?? false;
+
+        if (!$enrollmentId) {
+            $this->warn('enrollment_id manquant dans enrollment_result');
+            return;
+        }
+
+        $enrollment = FingerprintEnrollment::find($enrollmentId);
+        if (!$enrollment) {
+            $this->warn("Enrollment introuvable: {$enrollmentId}");
+            return;
+        }
+
+        if ($success && $templateHash) {
+            $enrollment->update([
+                'status' => 'enrolled',
+                'template_hash' => $templateHash,
+                'enrolled_at' => now(),
+            ]);
+
+            $employee = Employee::find($enrollment->employee_id);
+            if ($employee) {
+                $employee->update(['biometric_enrolled' => true]);
+
+                if ($enrollment->device) {
+                    $enrollment->device->increment('enrolled_count');
+                }
+            }
+
+            BiometricAuditLog::create([
+                'user_id' => $enrollment->employee_id,
+                'user_name' => $employee ? $employee->full_name : $enrollment->employee_id,
+                'action' => 'enrollment_completed',
+                'target' => $employee ? $employee->full_name : $enrollment->employee_id,
+                'details' => 'Enrolement biometrique reussi - template_hash: ' . substr($templateHash, 0, 12) . '...',
+            ]);
+
+            $this->mqtt->publish($responseTopic, config('mqtt.response_codes.accepted'), MqttClient::QOS_AT_LEAST_ONCE);
+            $this->info("Enrolement reussi pour enrollment {$enrollmentId}");
+        } else {
+            $enrollment->update(['status' => 'failed']);
+
+            BiometricAuditLog::create([
+                'user_id' => $enrollment->employee_id,
+                'user_name' => $enrollment->employee_id,
+                'action' => 'enrollment_failed',
+                'target' => $enrollment->employee_id,
+                'details' => 'Enrolement biometrique echoue - ' . ($data['error'] ?? 'Erreur inconnue'),
+            ]);
+
+            $this->mqtt->publish($responseTopic, config('mqtt.response_codes.rejected'), MqttClient::QOS_AT_LEAST_ONCE);
+            $this->warn("Enrolement echoue pour enrollment {$enrollmentId}");
+        }
     }
 }

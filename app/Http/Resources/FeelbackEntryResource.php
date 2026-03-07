@@ -17,6 +17,10 @@ class FeelbackEntryResource extends JsonResource
         return [
             'id' => (string) $this->id,
             'deviceId' => (string) $this->device_id,
+            'deviceSerialNumber' => $this->when(
+                $this->relationLoaded('device'),
+                fn () => $this->device?->serial_number
+            ),
             'level' => $this->level,
             'timestamp' => $this->created_at?->toISOString(),
             'siteId' => (string) $this->site_id,

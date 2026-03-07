@@ -18,11 +18,9 @@ class ScheduleController extends BaseApiController
     {
         $query = Schedule::query();
 
-        $query->when($request->input('company_id'), function ($q, $companyId) {
-            $q->where('company_id', $companyId);
-        });
+        $this->scopeByCompany($query);
 
-        $perPage = $request->input('perPage', 15);
+        $perPage = $request->input('per_page', 15);
         $schedules = $query->paginate($perPage);
 
         return $this->paginatedResponse(ScheduleResource::collection($schedules));
@@ -43,7 +41,8 @@ class ScheduleController extends BaseApiController
      */
     public function store(StoreScheduleRequest $request): JsonResponse
     {
-        $schedule = Schedule::create($request->validated());
+        $data = $this->enforceCompanyId($request->validated());
+        $schedule = Schedule::create($data);
 
         return $this->resourceResponse(new ScheduleResource($schedule), 'Horaire cree avec succes', 201);
     }

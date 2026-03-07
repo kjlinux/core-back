@@ -63,4 +63,36 @@ class BaseApiController extends Controller
             'data' => null,
         ]);
     }
+
+    /**
+     * Auto-inject company_id from authenticated user for non-super_admin.
+     */
+    protected function enforceCompanyId(array $data): array
+    {
+        $user = auth()->user();
+        if ($user && !$user->isSuperAdmin() && $user->company_id) {
+            $data['company_id'] = $user->company_id;
+        }
+
+        return $data;
+    }
+
+    /**
+     * Scope a query by company_id for non-super_admin users.
+     * Super admins can optionally filter by company_id via request param.
+     */
+    protected function scopeByCompany($query, string $companyIdColumn = 'company_id'): void
+    {
+        $user = auth()->user();
+        if (!$user) return;
+
+        if ($user->isSuperAdmin()) {
+            $requestCompanyId = request()->input('company_id');
+            if ($requestCompanyId) {
+                $query->where($companyIdColumn, $requestCompanyId);
+            }
+        } else {
+            $query->where($companyIdColumn, $user->company_id);
+        }
+    }
 }

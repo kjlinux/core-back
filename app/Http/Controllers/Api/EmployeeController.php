@@ -18,9 +18,7 @@ class EmployeeController extends BaseApiController
     {
         $query = Employee::query();
 
-        $query->when($request->input('company_id'), function ($q, $companyId) {
-            $q->where('company_id', $companyId);
-        });
+        $this->scopeByCompany($query);
 
         $query->when($request->input('site_id'), function ($q, $siteId) {
             $q->where('site_id', $siteId);
@@ -43,7 +41,7 @@ class EmployeeController extends BaseApiController
             });
         });
 
-        $perPage = $request->input('perPage', 15);
+        $perPage = $request->input('per_page', 15);
         $employees = $query->paginate($perPage);
 
         return $this->paginatedResponse(EmployeeResource::collection($employees));
@@ -64,7 +62,8 @@ class EmployeeController extends BaseApiController
      */
     public function store(StoreEmployeeRequest $request): JsonResponse
     {
-        $employee = Employee::create($request->validated());
+        $data = $this->enforceCompanyId($request->validated());
+        $employee = Employee::create($data);
 
         return $this->resourceResponse(new EmployeeResource($employee), 'Employe cree avec succes', 201);
     }

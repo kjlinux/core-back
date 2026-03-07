@@ -16,12 +16,12 @@ class StoreProductRequest extends FormRequest
         return [
             'name' => ['required', 'string'],
             'description' => ['required', 'string'],
-            'category' => ['required', 'in:standard_card,custom_card,enterprise_pack'],
+            'category' => ['nullable', 'in:standard_card,custom_card,enterprise_pack'],
             'price' => ['required', 'integer', 'min:0'],
             'stock_quantity' => ['required', 'integer', 'min:0'],
             'images' => ['nullable', 'array'],
-            'customizable' => ['required', 'boolean'],
-            'min_quantity' => ['required', 'integer', 'min:1'],
+            'customizable' => ['nullable', 'boolean'],
+            'min_quantity' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }

@@ -16,11 +16,16 @@ class UserResource extends JsonResource
     {
         return [
             'id' => (string) $this->id,
-            'email' => $this->email,
             'firstName' => $this->first_name,
             'lastName' => $this->last_name,
+            'email' => $this->email,
+            'phone' => $this->phone,
             'role' => $this->role,
-            'companyId' => (string) $this->company_id,
+            'companyId' => $this->company_id ? (string) $this->company_id : null,
+            'companyName' => $this->when(
+                $this->relationLoaded('company'),
+                fn () => $this->company?->name
+            ),
             'avatar' => $this->avatar,
             'isActive' => (bool) $this->is_active,
             'createdAt' => $this->created_at?->toISOString(),

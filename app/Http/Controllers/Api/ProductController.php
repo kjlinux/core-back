@@ -42,7 +42,11 @@ class ProductController extends BaseApiController
 
     public function store(StoreProductRequest $request): JsonResponse
     {
-        $product = Product::create($request->validated());
+        $data = $request->validated();
+        $data['category'] = $data['category'] ?? 'standard_card';
+        $data['customizable'] = $data['customizable'] ?? false;
+        $data['min_quantity'] = $data['min_quantity'] ?? 1;
+        $product = Product::create($data);
 
         return $this->resourceResponse(new ProductResource($product), '', 201);
     }

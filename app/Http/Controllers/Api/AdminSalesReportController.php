@@ -35,7 +35,7 @@ class AdminSalesReportController extends BaseApiController
             ->when($startDate, fn ($q) => $q->whereDate('created_at', '>=', $startDate))
             ->when($endDate, fn ($q) => $q->whereDate('created_at', '<=', $endDate))
             ->select(
-                DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month"),
+                DB::raw("TO_CHAR(created_at, 'YYYY-MM') as month"),
                 DB::raw('SUM(total) as revenue'),
                 DB::raw('COUNT(*) as orders')
             )

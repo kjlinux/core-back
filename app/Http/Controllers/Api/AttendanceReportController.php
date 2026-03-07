@@ -91,8 +91,10 @@ class AttendanceReportController extends BaseApiController
 
     private function applyEmployeeFilters($query, Request $request): void
     {
-        if ($request->filled('company_id')) {
-            $query->where('company_id', $request->input('company_id'));
+        $user = $request->user();
+        $companyId = $user->isSuperAdmin() ? $request->input('company_id') : $user->company_id;
+        if ($companyId) {
+            $query->where('company_id', $companyId);
         }
         if ($request->filled('site_id')) {
             $query->where('site_id', $request->input('site_id'));

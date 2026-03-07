@@ -13,12 +13,19 @@ class CompanyController extends BaseApiController
 {
     /**
      * Get all companies with sites, departments, and employee count.
+     * Non-super_admin users only see their own company.
      */
     public function index(): JsonResponse
     {
-        $companies = Company::with('sites.departments')
-            ->withCount('employees')
-            ->get();
+        $query = Company::with('sites.departments')
+            ->withCount('employees');
+
+        $user = auth()->user();
+        if (!$user->isSuperAdmin()) {
+            $query->where('id', $user->company_id);
+        }
+
+        $companies = $query->get();
 
         return $this->successResponse(CompanyResource::collection($companies));
     }

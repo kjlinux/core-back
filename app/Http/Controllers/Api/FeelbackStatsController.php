@@ -12,6 +12,19 @@ class FeelbackStatsController extends BaseApiController
     public function index(Request $request): JsonResponse
     {
         $query = FeelbackEntry::query();
+        $user = $request->user();
+
+        if ($user->isSuperAdmin()) {
+            if ($request->filled('company_id')) {
+                $query->whereHas('site', function ($q) use ($request) {
+                    $q->where('company_id', $request->company_id);
+                });
+            }
+        } else {
+            $query->whereHas('site', function ($q) use ($user) {
+                $q->where('company_id', $user->company_id);
+            });
+        }
 
         if ($request->filled('start_date')) {
             $query->whereDate('created_at', '>=', $request->start_date);
@@ -19,12 +32,6 @@ class FeelbackStatsController extends BaseApiController
 
         if ($request->filled('end_date')) {
             $query->whereDate('created_at', '<=', $request->end_date);
-        }
-
-        if ($request->filled('company_id')) {
-            $query->whereHas('site', function ($q) use ($request) {
-                $q->where('company_id', $request->company_id);
-            });
         }
 
         if ($request->filled('site_id')) {
@@ -54,7 +61,12 @@ class FeelbackStatsController extends BaseApiController
 
     public function byAgency(Request $request, string $agencyId): JsonResponse
     {
-        $site = Site::findOrFail($agencyId);
+        $user = $request->user();
+        $siteQuery = Site::where('id', $agencyId);
+        if (!$user->isSuperAdmin()) {
+            $siteQuery->where('company_id', $user->company_id);
+        }
+        $site = $siteQuery->firstOrFail();
 
         $query = FeelbackEntry::where('site_id', $agencyId);
 
@@ -91,10 +103,15 @@ class FeelbackStatsController extends BaseApiController
 
     public function comparison(Request $request): JsonResponse
     {
+        $user = $request->user();
         $siteQuery = Site::query();
 
-        if ($request->filled('company_id')) {
-            $siteQuery->where('company_id', $request->company_id);
+        if ($user->isSuperAdmin()) {
+            if ($request->filled('company_id')) {
+                $siteQuery->where('company_id', $request->company_id);
+            }
+        } else {
+            $siteQuery->where('company_id', $user->company_id);
         }
 
         $sites = $siteQuery->get();

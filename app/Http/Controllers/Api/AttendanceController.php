@@ -22,17 +22,22 @@ class AttendanceController extends BaseApiController
 
         $date = $request->input('date');
 
-        $query = AttendanceRecord::with('employee')
+        $query = AttendanceRecord::with('employee.department')
             ->whereDate('date', $date);
+
+        if ($request->filled('source')) {
+            $query->where('source', $request->input('source'));
+        }
 
         $this->applyLocationFilters($query, $request);
 
         $records = $query->get();
 
-        // Calculate total employees for the filtered scope
         $employeeQuery = Employee::where('is_active', true);
-        if ($request->input('company_id')) {
-            $employeeQuery->where('company_id', $request->input('company_id'));
+        $user = $request->user();
+        $companyId = $user->isSuperAdmin() ? $request->input('company_id') : $user->company_id;
+        if ($companyId) {
+            $employeeQuery->where('company_id', $companyId);
         }
         if ($request->input('site_id')) {
             $employeeQuery->where('site_id', $request->input('site_id'));
@@ -42,9 +47,9 @@ class AttendanceController extends BaseApiController
         }
         $totalEmployees = $employeeQuery->count();
 
-        $present = $records->where('status', 'present')->count();
+        $present = $records->whereIn('status', ['present', 'left_early'])->count();
         $absent = $records->where('status', 'absent')->count();
-        $late = $records->where('is_late', true)->count();
+        $late = $records->where('status', 'late')->count();
 
         return $this->successResponse([
             'date' => $date,
@@ -69,24 +74,26 @@ class AttendanceController extends BaseApiController
         $startDate = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
         $endDate = Carbon::createFromFormat('Y-m', $month)->endOfMonth();
 
-        $query = AttendanceRecord::whereBetween('date', [$startDate, $endDate]);
+        $query = AttendanceRecord::with('employee.department')
+            ->whereBetween('date', [$startDate, $endDate]);
 
         $this->applyLocationFilters($query, $request);
 
         $records = $query->get();
 
-        $summaries = $records->groupBy('employee_id')->map(function ($employeeRecords, $employeeId) {
+        $summaries = $records->groupBy('employee_id')->map(function ($employeeRecords) {
             $employee = $employeeRecords->first()->employee;
             $totalDays = $employeeRecords->count();
-            $presentDays = $employeeRecords->where('status', 'present')->count();
+            $presentDays = $employeeRecords->whereIn('status', ['present', 'late', 'left_early'])->count();
             $absentDays = $employeeRecords->where('status', 'absent')->count();
-            $lateDays = $employeeRecords->where('is_late', true)->count();
+            $lateDays = $employeeRecords->where('status', 'late')->count();
             $totalLateMinutes = $employeeRecords->sum('late_minutes');
 
             return [
-                'employee_id' => $employeeId,
+                'employee_id' => $employeeRecords->first()->employee_id,
                 'employee_name' => $employee ? $employee->first_name . ' ' . $employee->last_name : null,
                 'employee_number' => $employee ? $employee->employee_number : null,
+                'department' => $employee && $employee->department ? $employee->department->name : null,
                 'totalDays' => $totalDays,
                 'presentDays' => $presentDays,
                 'absentDays' => $absentDays,
@@ -111,9 +118,9 @@ class AttendanceController extends BaseApiController
             'end_date' => 'required|date|after_or_equal:start_date',
         ]);
 
-        $employee = Employee::findOrFail($employeeId);
+        Employee::findOrFail($employeeId);
 
-        $records = AttendanceRecord::with('employee')
+        $records = AttendanceRecord::with('employee.department')
             ->where('employee_id', $employeeId)
             ->whereBetween('date', [$request->input('start_date'), $request->input('end_date')])
             ->orderBy('date', 'desc')
@@ -134,7 +141,7 @@ class AttendanceController extends BaseApiController
 
         $employeeIds = Employee::where('department_id', $departmentId)->pluck('id');
 
-        $records = AttendanceRecord::with('employee')
+        $records = AttendanceRecord::with('employee.department')
             ->whereIn('employee_id', $employeeIds)
             ->whereBetween('date', [$request->input('start_date'), $request->input('end_date')])
             ->orderBy('date', 'desc')
@@ -156,32 +163,31 @@ class AttendanceController extends BaseApiController
         $startDate = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
         $endDate = Carbon::createFromFormat('Y-m', $month)->endOfMonth();
 
-        $query = AttendanceRecord::with('employee')
+        $query = AttendanceRecord::with('employee.department')
             ->whereBetween('date', [$startDate, $endDate]);
 
         $this->applyLocationFilters($query, $request);
 
         $records = $query->get();
 
-        // Overall stats
         $totalRecords = $records->count();
-        $presentCount = $records->where('status', 'present')->count();
+        $presentCount = $records->whereIn('status', ['present', 'late', 'left_early'])->count();
         $absentCount = $records->where('status', 'absent')->count();
-        $lateCount = $records->where('is_late', true)->count();
+        $lateCount = $records->where('status', 'late')->count();
 
-        // Per-employee breakdown
-        $employeeSummaries = $records->groupBy('employee_id')->map(function ($employeeRecords, $employeeId) {
+        $employeeSummaries = $records->groupBy('employee_id')->map(function ($employeeRecords) {
             $employee = $employeeRecords->first()->employee;
             $totalDays = $employeeRecords->count();
-            $presentDays = $employeeRecords->where('status', 'present')->count();
+            $presentDays = $employeeRecords->whereIn('status', ['present', 'late', 'left_early'])->count();
             $absentDays = $employeeRecords->where('status', 'absent')->count();
-            $lateDays = $employeeRecords->where('is_late', true)->count();
+            $lateDays = $employeeRecords->where('status', 'late')->count();
             $totalLateMinutes = $employeeRecords->sum('late_minutes');
 
             return [
-                'employee_id' => $employeeId,
+                'employee_id' => $employeeRecords->first()->employee_id,
                 'employee_name' => $employee ? $employee->first_name . ' ' . $employee->last_name : null,
                 'employee_number' => $employee ? $employee->employee_number : null,
+                'department' => $employee && $employee->department ? $employee->department->name : null,
                 'totalDays' => $totalDays,
                 'presentDays' => $presentDays,
                 'absentDays' => $absentDays,
@@ -211,7 +217,7 @@ class AttendanceController extends BaseApiController
 
         $date = $request->input('date');
 
-        $query = AttendanceRecord::with('employee')
+        $query = AttendanceRecord::with('employee.department')
             ->whereDate('date', $date)
             ->where('source', 'biometric');
 
@@ -219,10 +225,11 @@ class AttendanceController extends BaseApiController
 
         $records = $query->get();
 
-        // Calculate stats for biometric records
         $employeeQuery = Employee::where('is_active', true);
-        if ($request->input('company_id')) {
-            $employeeQuery->where('company_id', $request->input('company_id'));
+        $user = $request->user();
+        $bioCompanyId = $user->isSuperAdmin() ? $request->input('company_id') : $user->company_id;
+        if ($bioCompanyId) {
+            $employeeQuery->where('company_id', $bioCompanyId);
         }
         if ($request->input('site_id')) {
             $employeeQuery->where('site_id', $request->input('site_id'));
@@ -232,9 +239,10 @@ class AttendanceController extends BaseApiController
         }
         $totalEmployees = $employeeQuery->count();
 
-        $present = $records->where('status', 'present')->count();
+        $present = $records->whereIn('status', ['present', 'left_early'])->count();
         $absent = $records->where('status', 'absent')->count();
-        $late = $records->where('is_late', true)->count();
+        $late = $records->where('status', 'late')->count();
+        $doubleBadgeCount = $records->where('is_double_badge', true)->count();
 
         return $this->successResponse([
             'date' => $date,
@@ -243,20 +251,25 @@ class AttendanceController extends BaseApiController
             'present' => $present,
             'absent' => $absent,
             'late' => $late,
+            'doubleBadgeCount' => $doubleBadgeCount,
             'records' => AttendanceRecordResource::collection($records),
         ]);
     }
 
     /**
      * Apply company, site, and department filters via employee relationships.
+     * Non-super_admin users are always scoped to their own company.
      */
     private function applyLocationFilters($query, Request $request): void
     {
-        if ($request->input('company_id') || $request->input('site_id') || $request->input('department_id')) {
-            $query->whereHas('employee', function ($q) use ($request) {
-                $q->when($request->input('company_id'), function ($q, $companyId) {
+        $user = $request->user();
+        $companyId = $user->isSuperAdmin() ? $request->input('company_id') : $user->company_id;
+
+        if ($companyId || $request->input('site_id') || $request->input('department_id')) {
+            $query->whereHas('employee', function ($q) use ($companyId, $request) {
+                if ($companyId) {
                     $q->where('company_id', $companyId);
-                });
+                }
                 $q->when($request->input('site_id'), function ($q, $siteId) {
                     $q->where('site_id', $siteId);
                 });

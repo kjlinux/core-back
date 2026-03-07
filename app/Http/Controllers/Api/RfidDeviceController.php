@@ -15,9 +15,7 @@ class RfidDeviceController extends BaseApiController
     {
         $query = RfidDevice::with('site');
 
-        if ($request->filled('company_id')) {
-            $query->where('company_id', $request->company_id);
-        }
+        $this->scopeByCompany($query);
 
         if ($request->filled('site_id')) {
             $query->where('site_id', $request->site_id);
@@ -41,7 +39,7 @@ class RfidDeviceController extends BaseApiController
 
     public function store(StoreRfidDeviceRequest $request): JsonResponse
     {
-        $data = $request->validated();
+        $data = $this->enforceCompanyId($request->validated());
         $data['mqtt_topic'] = 'core/rfid/sensor/' . $data['serial_number'] . '/event';
 
         $device = RfidDevice::create($data);

@@ -71,13 +71,13 @@ class OrderController extends BaseApiController
 
             $order = Order::create([
                 'order_number' => 'ORD-' . strtoupper(Str::random(8)),
-                'company_id' => $request->user()->company_id,
+                'company_id' => $data['company_id'] ?? $request->user()->company_id,
                 'subtotal' => $subtotal,
                 'delivery_fee' => $deliveryFee,
                 'total' => $total,
                 'currency' => 'XOF',
                 'status' => 'pending',
-                'payment_method' => $data['payment_method'] ?? 'ligdicash',
+                'payment_method' => $data['payment_method'] ?? 'mobile_money',
                 'payment_status' => 'pending',
                 'delivery_address' => $data['delivery_address'] ?? null,
             ]);
@@ -113,6 +113,15 @@ class OrderController extends BaseApiController
     {
         $order = Order::with('items')->findOrFail($id);
 
+        // Paiement manuel : pas de passerelle, juste confirmation en attente
+        if ($order->payment_method === 'manual') {
+            return $this->successResponse([
+                'payment_url' => null,
+                'token' => null,
+                'message' => 'Commande enregistree. Un administrateur vous contactera pour confirmer le paiement.',
+            ]);
+        }
+
         $items = $order->items->map(function ($item) {
             return [
                 'name' => $item->product_name,
@@ -130,7 +139,13 @@ class OrderController extends BaseApiController
         ]);
 
         if (!$result['success']) {
-            return $this->errorResponse($result['message'] ?? 'Echec de creation du paiement', 500);
+            // Passerelle indisponible : commande créée, retourner succès avec flag pending
+            return $this->successResponse([
+                'payment_url' => null,
+                'token' => null,
+                'pending' => true,
+                'message' => 'La passerelle de paiement est temporairement indisponible. Votre commande est enregistree et sera traitee manuellement.',
+            ]);
         }
 
         $order->update(['payment_token' => $result['token']]);
@@ -138,6 +153,7 @@ class OrderController extends BaseApiController
         return $this->successResponse([
             'payment_url' => $result['payment_url'],
             'token' => $result['token'],
+            'pending' => false,
         ]);
     }
 }

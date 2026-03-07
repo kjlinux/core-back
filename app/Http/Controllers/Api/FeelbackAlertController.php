@@ -13,6 +13,13 @@ class FeelbackAlertController extends BaseApiController
     {
         $query = FeelbackAlert::with(['site', 'device']);
 
+        $user = $request->user();
+        if (!$user->isSuperAdmin()) {
+            $query->whereHas('site', function ($q) use ($user) {
+                $q->where('company_id', $user->company_id);
+            });
+        }
+
         if ($request->filled('site_id')) {
             $query->where('site_id', $request->site_id);
         }

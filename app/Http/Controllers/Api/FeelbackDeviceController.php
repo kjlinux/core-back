@@ -15,9 +15,7 @@ class FeelbackDeviceController extends BaseApiController
     {
         $query = FeelbackDevice::with('site');
 
-        if ($request->filled('company_id')) {
-            $query->where('company_id', $request->company_id);
-        }
+        $this->scopeByCompany($query);
 
         if ($request->filled('site_id')) {
             $query->where('site_id', $request->site_id);
@@ -41,7 +39,7 @@ class FeelbackDeviceController extends BaseApiController
 
     public function store(StoreFeelbackDeviceRequest $request): JsonResponse
     {
-        $data = $request->validated();
+        $data = $this->enforceCompanyId($request->validated());
         $data['mqtt_topic'] = 'core/feelback/sensor/' . $data['serial_number'] . '/event';
 
         $device = FeelbackDevice::create($data);

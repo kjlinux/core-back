@@ -15,9 +15,7 @@ class BiometricDeviceController extends BaseApiController
     {
         $query = BiometricDevice::with('site');
 
-        if ($request->filled('company_id')) {
-            $query->where('company_id', $request->company_id);
-        }
+        $this->scopeByCompany($query);
 
         if ($request->filled('site_id')) {
             $query->where('site_id', $request->site_id);
@@ -41,7 +39,7 @@ class BiometricDeviceController extends BaseApiController
 
     public function store(StoreDeviceRequest $request): JsonResponse
     {
-        $data = $request->validated();
+        $data = $this->enforceCompanyId($request->validated());
         $data['mqtt_topic'] = 'core/biometric/sensor/' . $data['serial_number'] . '/event';
 
         $device = BiometricDevice::create($data);
@@ -72,6 +70,29 @@ class BiometricDeviceController extends BaseApiController
         $device->delete();
 
         return $this->noContentResponse();
+    }
+
+    public function setOnline(Request $request, string $id): JsonResponse
+    {
+        $request->validate([
+            'is_online' => ['required', 'boolean'],
+        ]);
+
+        $device = BiometricDevice::findOrFail($id);
+        $device->update([
+            'is_online' => $request->boolean('is_online'),
+            'last_sync_at' => now(),
+        ]);
+
+        BiometricAuditLog::create([
+            'user_id' => $request->user()->id,
+            'user_name' => $request->user()->name,
+            'action' => $request->boolean('is_online') ? 'device_set_online' : 'device_set_offline',
+            'target' => $device->serial_number,
+            'details' => 'Statut manuel: ' . $device->name . ' -> ' . ($request->boolean('is_online') ? 'en ligne' : 'hors ligne'),
+        ]);
+
+        return $this->resourceResponse(new BiometricDeviceResource($device->fresh()), 'Statut mis a jour');
     }
 
     public function sync(Request $request, string $id): JsonResponse

@@ -27,85 +27,163 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\RfidDeviceController;
 use App\Http\Controllers\Api\MqttController;
 use App\Http\Controllers\Api\ForgotPasswordController;
+use App\Http\Controllers\Api\ResetPasswordController;
 use App\Http\Controllers\Api\AdminSalesReportController;
 use App\Http\Controllers\Api\AttendanceReportController;
 use App\Http\Controllers\Api\FeelbackReportController;
+use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\ProfileController;
 
 // Public routes
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/forgot-password', ForgotPasswordController::class);
+Route::post('/auth/reset-password', ResetPasswordController::class);
 Route::post('/payment/callback', [PaymentCallbackController::class, 'handle']);
 
 // Authenticated routes
 Route::middleware('auth:sanctum')->group(function () {
 
-    // Auth
+    // =============================================
+    // Auth (tous les roles)
+    // =============================================
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/auth/refresh', [AuthController::class, 'refresh']);
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::put('/auth/profile', [ProfileController::class, 'update']);
+    Route::put('/auth/password', [ProfileController::class, 'changePassword']);
 
-    // Companies
+    // =============================================
+    // Super Admin uniquement
+    // =============================================
+    Route::middleware('role:super_admin')->group(function () {
+        // Companies CUD
+        Route::post('/companies', [CompanyController::class, 'store']);
+        Route::put('/companies/{id}', [CompanyController::class, 'update']);
+        Route::patch('/companies/{id}/toggle-active', [CompanyController::class, 'toggleActive']);
+
+        // Marketplace products CUD
+        Route::post('/marketplace/products', [ProductController::class, 'store']);
+        Route::put('/marketplace/products/{id}', [ProductController::class, 'update']);
+        Route::delete('/marketplace/products/{id}', [ProductController::class, 'destroy']);
+        Route::patch('/marketplace/products/{id}/stock', [ProductController::class, 'updateStock']);
+
+        // Admin orders + reports
+        Route::get('/admin/orders', [AdminOrderController::class, 'index']);
+        Route::get('/admin/reports/sales', [AdminSalesReportController::class, 'index']);
+
+        // MQTT
+        Route::post('/mqtt/test', [MqttController::class, 'testConnection']);
+        Route::post('/mqtt/send-command', [MqttController::class, 'sendCommand']);
+
+        // User management - suppression
+        Route::delete('/users/{id}', [UserController::class, 'destroy']);
+    });
+
+    // =============================================
+    // Admin (super_admin + admin_enterprise)
+    // =============================================
+    Route::middleware('role:super_admin,admin_enterprise')->group(function () {
+        // Sites CUD
+        Route::post('/sites', [SiteController::class, 'store']);
+        Route::put('/sites/{id}', [SiteController::class, 'update']);
+        Route::delete('/sites/{id}', [SiteController::class, 'destroy']);
+
+        // Departments CUD
+        Route::post('/departments', [DepartmentController::class, 'store']);
+        Route::put('/departments/{id}', [DepartmentController::class, 'update']);
+        Route::delete('/departments/{id}', [DepartmentController::class, 'destroy']);
+
+        // Employees CUD
+        Route::post('/employees', [EmployeeController::class, 'store']);
+        Route::put('/employees/{id}', [EmployeeController::class, 'update']);
+        Route::delete('/employees/{id}', [EmployeeController::class, 'destroy']);
+        Route::patch('/employees/{id}/toggle-active', [EmployeeController::class, 'toggleActive']);
+
+        // RFID Devices CUD
+        Route::post('/rfid/devices', [RfidDeviceController::class, 'store']);
+        Route::put('/rfid/devices/{id}', [RfidDeviceController::class, 'update']);
+        Route::delete('/rfid/devices/{id}', [RfidDeviceController::class, 'destroy']);
+
+        // Cards management
+        Route::post('/cards', [CardController::class, 'store']);
+        Route::patch('/cards/{id}/assign', [CardController::class, 'assign']);
+        Route::patch('/cards/{id}/unassign', [CardController::class, 'unassign']);
+        Route::patch('/cards/{id}/block', [CardController::class, 'block']);
+        Route::patch('/cards/{id}/unblock', [CardController::class, 'unblock']);
+
+        // Schedules CUD
+        Route::post('/schedules', [ScheduleController::class, 'store']);
+        Route::put('/schedules/{id}', [ScheduleController::class, 'update']);
+        Route::delete('/schedules/{id}', [ScheduleController::class, 'destroy']);
+
+        // Holidays CUD
+        Route::post('/holidays', [HolidayController::class, 'store']);
+        Route::put('/holidays/{id}', [HolidayController::class, 'update']);
+        Route::delete('/holidays/{id}', [HolidayController::class, 'destroy']);
+
+        // Biometric devices CUD + enrollments
+        Route::post('/biometric/devices', [BiometricDeviceController::class, 'store']);
+        Route::delete('/biometric/devices/{id}', [BiometricDeviceController::class, 'destroy']);
+        Route::post('/biometric/devices/{id}/sync', [BiometricDeviceController::class, 'sync']);
+        Route::patch('/biometric/devices/{id}/set-online', [BiometricDeviceController::class, 'setOnline']);
+        Route::post('/biometric/enrollments', [EnrollmentController::class, 'store']);
+        Route::post('/biometric/enrollments/enroll', [EnrollmentController::class, 'enroll']);
+        Route::delete('/biometric/enrollments/{id}', [EnrollmentController::class, 'destroy']);
+
+        // Feelback devices CUD + alert settings
+        Route::post('/feelback/devices', [FeelbackDeviceController::class, 'store']);
+        Route::put('/feelback/devices/{id}', [FeelbackDeviceController::class, 'update']);
+        Route::delete('/feelback/devices/{id}', [FeelbackDeviceController::class, 'destroy']);
+        Route::put('/feelback/alerts/settings', [FeelbackAlertController::class, 'updateSettings']);
+
+        // User management - lecture et gestion
+        Route::get('/users', [UserController::class, 'index']);
+        Route::post('/users', [UserController::class, 'store']);
+        Route::get('/users/{id}', [UserController::class, 'show']);
+        Route::put('/users/{id}', [UserController::class, 'update']);
+        Route::patch('/users/{id}/toggle-active', [UserController::class, 'toggleActive']);
+        Route::post('/users/{id}/reset-password', [UserController::class, 'resetPassword']);
+    });
+
+    // =============================================
+    // Tous les roles authentifies (lecture)
+    // =============================================
+
+    // Companies (lecture)
     Route::get('/companies', [CompanyController::class, 'index']);
-    Route::post('/companies', [CompanyController::class, 'store']);
     Route::get('/companies/{id}', [CompanyController::class, 'show']);
-    Route::put('/companies/{id}', [CompanyController::class, 'update']);
-    Route::patch('/companies/{id}/toggle-active', [CompanyController::class, 'toggleActive']);
     Route::get('/companies/{id}/sites', [CompanyController::class, 'sites']);
 
-    // Sites
+    // Sites (lecture)
     Route::get('/sites', [SiteController::class, 'index']);
-    Route::post('/sites', [SiteController::class, 'store']);
     Route::get('/sites/{id}', [SiteController::class, 'show']);
-    Route::put('/sites/{id}', [SiteController::class, 'update']);
-    Route::delete('/sites/{id}', [SiteController::class, 'destroy']);
     Route::get('/sites/{id}/departments', [SiteController::class, 'departments']);
 
-    // Departments
+    // Departments (lecture)
     Route::get('/departments', [DepartmentController::class, 'index']);
-    Route::post('/departments', [DepartmentController::class, 'store']);
     Route::get('/departments/{id}', [DepartmentController::class, 'show']);
-    Route::put('/departments/{id}', [DepartmentController::class, 'update']);
-    Route::delete('/departments/{id}', [DepartmentController::class, 'destroy']);
 
-    // Employees
+    // Employees (lecture)
     Route::get('/employees', [EmployeeController::class, 'index']);
-    Route::post('/employees', [EmployeeController::class, 'store']);
     Route::get('/employees/{id}', [EmployeeController::class, 'show']);
-    Route::put('/employees/{id}', [EmployeeController::class, 'update']);
-    Route::delete('/employees/{id}', [EmployeeController::class, 'destroy']);
-    Route::patch('/employees/{id}/toggle-active', [EmployeeController::class, 'toggleActive']);
 
-    // RFID Devices
+    // RFID Devices (lecture)
     Route::get('/rfid/devices', [RfidDeviceController::class, 'index']);
-    Route::post('/rfid/devices', [RfidDeviceController::class, 'store']);
     Route::get('/rfid/devices/{id}', [RfidDeviceController::class, 'show']);
-    Route::put('/rfid/devices/{id}', [RfidDeviceController::class, 'update']);
-    Route::delete('/rfid/devices/{id}', [RfidDeviceController::class, 'destroy']);
 
-    // RFID Cards
+    // Cards (lecture)
     Route::get('/cards', [CardController::class, 'index']);
-    Route::post('/cards', [CardController::class, 'store']);
     Route::get('/cards/{id}', [CardController::class, 'show']);
-    Route::patch('/cards/{id}/assign', [CardController::class, 'assign']);
-    Route::patch('/cards/{id}/unassign', [CardController::class, 'unassign']);
-    Route::patch('/cards/{id}/block', [CardController::class, 'block']);
-    Route::patch('/cards/{id}/unblock', [CardController::class, 'unblock']);
     Route::get('/cards/{id}/history', [CardController::class, 'history']);
 
-    // Schedules
+    // Schedules (lecture)
     Route::get('/schedules', [ScheduleController::class, 'index']);
-    Route::post('/schedules', [ScheduleController::class, 'store']);
     Route::get('/schedules/{id}', [ScheduleController::class, 'show']);
-    Route::put('/schedules/{id}', [ScheduleController::class, 'update']);
-    Route::delete('/schedules/{id}', [ScheduleController::class, 'destroy']);
 
-    // Holidays
+    // Holidays (lecture)
     Route::get('/holidays', [HolidayController::class, 'index']);
-    Route::post('/holidays', [HolidayController::class, 'store']);
-    Route::put('/holidays/{id}', [HolidayController::class, 'update']);
-    Route::delete('/holidays/{id}', [HolidayController::class, 'destroy']);
 
-    // Attendance
+    // Attendance (lecture)
     Route::get('/attendance/daily', [AttendanceController::class, 'daily']);
     Route::get('/attendance/monthly', [AttendanceController::class, 'monthly']);
     Route::get('/attendance/employee/{employeeId}', [AttendanceController::class, 'byEmployee']);
@@ -114,63 +192,42 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/attendance/biometric', [AttendanceController::class, 'biometric']);
     Route::get('/attendance/reports', [AttendanceReportController::class, 'index']);
 
-    // Biometric
+    // Biometric (lecture)
     Route::get('/biometric/devices', [BiometricDeviceController::class, 'index']);
-    Route::post('/biometric/devices', [BiometricDeviceController::class, 'store']);
     Route::get('/biometric/devices/{id}', [BiometricDeviceController::class, 'show']);
-    Route::delete('/biometric/devices/{id}', [BiometricDeviceController::class, 'destroy']);
-    Route::post('/biometric/devices/{id}/sync', [BiometricDeviceController::class, 'sync']);
     Route::get('/biometric/enrollments', [EnrollmentController::class, 'index']);
-    Route::post('/biometric/enrollments', [EnrollmentController::class, 'store']);
-    Route::delete('/biometric/enrollments/{id}', [EnrollmentController::class, 'destroy']);
+    Route::get('/biometric/enrollments/{id}', [EnrollmentController::class, 'show']);
     Route::get('/biometric/inconsistencies', [BiometricInconsistencyController::class, 'index']);
     Route::get('/biometric/audit-log', [BiometricAuditController::class, 'index']);
 
-    // Feelback
+    // Feelback (lecture)
     Route::get('/feelback/stats', [FeelbackStatsController::class, 'index']);
     Route::get('/feelback/entries', [FeelbackEntryController::class, 'index']);
     Route::get('/feelback/devices', [FeelbackDeviceController::class, 'index']);
-    Route::post('/feelback/devices', [FeelbackDeviceController::class, 'store']);
     Route::get('/feelback/devices/{id}', [FeelbackDeviceController::class, 'show']);
-    Route::put('/feelback/devices/{id}', [FeelbackDeviceController::class, 'update']);
-    Route::delete('/feelback/devices/{id}', [FeelbackDeviceController::class, 'destroy']);
     Route::get('/feelback/alerts', [FeelbackAlertController::class, 'index']);
-    Route::put('/feelback/alerts/settings', [FeelbackAlertController::class, 'updateSettings']);
     Route::get('/feelback/stats/agency/{agencyId}', [FeelbackStatsController::class, 'byAgency']);
     Route::get('/feelback/comparison', [FeelbackStatsController::class, 'comparison']);
     Route::get('/feelback/reports', [FeelbackReportController::class, 'index']);
 
-    // Marketplace
+    // Marketplace products (lecture)
     Route::get('/marketplace/products', [ProductController::class, 'index']);
-    Route::post('/marketplace/products', [ProductController::class, 'store']);
     Route::get('/marketplace/products/{id}', [ProductController::class, 'show']);
-    Route::put('/marketplace/products/{id}', [ProductController::class, 'update']);
-    Route::delete('/marketplace/products/{id}', [ProductController::class, 'destroy']);
-    Route::patch('/marketplace/products/{id}/stock', [ProductController::class, 'updateStock']);
 
-    // Orders
+    // Orders (tous roles - scope par company via BelongsToCompany)
     Route::post('/orders', [OrderController::class, 'store']);
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
     Route::patch('/orders/{id}/cancel', [OrderController::class, 'cancel']);
     Route::post('/orders/{id}/payment', [OrderController::class, 'initiatePayment']);
 
-    // Admin (super_admin only)
-    Route::middleware('role:super_admin')->group(function () {
-        Route::get('/admin/orders', [AdminOrderController::class, 'index']);
-        Route::get('/admin/reports/sales', [AdminSalesReportController::class, 'index']);
-    });
-
     // Dashboard
     Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
     Route::get('/dashboard/trends', [DashboardController::class, 'trends']);
+    Route::get('/dashboard/charts', [DashboardController::class, 'charts']);
 
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::patch('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
-
-    // MQTT
-    Route::post('/mqtt/test', [MqttController::class, 'testConnection']);
-    Route::post('/mqtt/send-command', [MqttController::class, 'sendCommand']);
 });
