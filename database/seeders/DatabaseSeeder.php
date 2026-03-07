@@ -16,20 +16,20 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
-            CompanySeeder::class,
-            SiteSeeder::class,
-            DepartmentSeeder::class,
+            // CompanySeeder::class,
+            // SiteSeeder::class,
+            // DepartmentSeeder::class,
             UserSeeder::class,
-            EmployeeSeeder::class,
-            RfidCardSeeder::class,
-            RfidDeviceSeeder::class,
-            ScheduleSeeder::class,
-            BiometricDeviceSeeder::class,
-            FeelbackDeviceSeeder::class,
+            // EmployeeSeeder::class,
+            // RfidCardSeeder::class,
+            // RfidDeviceSeeder::class,
+            // ScheduleSeeder::class,
+            // BiometricDeviceSeeder::class,
+            // FeelbackDeviceSeeder::class,
             ProductSeeder::class,
-            OrderSeeder::class,
-            AttendanceSeeder::class,
-            FeelbackEntrySeeder::class,
+            // OrderSeeder::class,
+            // AttendanceSeeder::class,
+            // FeelbackEntrySeeder::class,
         ]);
     }
 }
