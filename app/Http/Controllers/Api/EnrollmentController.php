@@ -132,6 +132,8 @@ class EnrollmentController extends BaseApiController
     {
         $enrollment = FingerprintEnrollment::findOrFail($id);
         $employeeId = $enrollment->employee_id;
+        $wasEnrolled = $enrollment->status === 'enrolled';
+        $deviceId = $enrollment->device_id;
 
         BiometricAuditLog::create([
             'user_id' => $request->user()->id,
@@ -142,6 +144,10 @@ class EnrollmentController extends BaseApiController
         ]);
 
         $enrollment->delete();
+
+        if ($wasEnrolled) {
+            BiometricDevice::where('id', $deviceId)->decrement('enrolled_count');
+        }
 
         $remainingEnrollments = FingerprintEnrollment::where('employee_id', $employeeId)->count();
         $employee = Employee::find($employeeId);

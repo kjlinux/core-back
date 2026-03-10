@@ -13,7 +13,9 @@ class BiometricDeviceController extends BaseApiController
 {
     public function index(Request $request): JsonResponse
     {
-        $query = BiometricDevice::with('site');
+        $query = BiometricDevice::with('site')->withCount(['enrollments as enrolled_count' => function ($q) {
+            $q->where('status', 'enrolled');
+        }]);
 
         $this->scopeByCompany($query);
 
@@ -32,7 +34,9 @@ class BiometricDeviceController extends BaseApiController
 
     public function show(string $id): JsonResponse
     {
-        $device = BiometricDevice::with(['site', 'enrollments'])->findOrFail($id);
+        $device = BiometricDevice::with(['site', 'enrollments'])->withCount(['enrollments as enrolled_count' => function ($q) {
+            $q->where('status', 'enrolled');
+        }])->findOrFail($id);
 
         return $this->resourceResponse(new BiometricDeviceResource($device));
     }
