@@ -31,10 +31,18 @@ use App\Http\Controllers\Api\ResetPasswordController;
 use App\Http\Controllers\Api\AdminSalesReportController;
 use App\Http\Controllers\Api\AttendanceReportController;
 use App\Http\Controllers\Api\FeelbackReportController;
+use App\Http\Controllers\Api\ReviewConfigController;
+use App\Http\Controllers\Api\PublicReviewController;
+use App\Http\Controllers\Api\ReviewStatsController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\ProfileController;
 
-// Public routes
+// Public routes (sans auth)
+Route::prefix('public')->group(function () {
+    Route::get('/review/{token}', [PublicReviewController::class, 'show']);
+    Route::post('/review/{token}/submit', [PublicReviewController::class, 'submit']);
+});
+
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/forgot-password', ForgotPasswordController::class);
 Route::post('/auth/reset-password', ResetPasswordController::class);
@@ -136,6 +144,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/feelback/devices/{id}', [FeelbackDeviceController::class, 'destroy']);
         Route::put('/feelback/alerts/settings', [FeelbackAlertController::class, 'updateSettings']);
 
+        // Review QR config CUD
+        Route::post('/feelback/review-config', [ReviewConfigController::class, 'store']);
+        Route::post('/feelback/review-config/regenerate-token', [ReviewConfigController::class, 'regenerateToken']);
+
         // User management - lecture et gestion
         Route::get('/users', [UserController::class, 'index']);
         Route::post('/users', [UserController::class, 'store']);
@@ -201,6 +213,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/biometric/audit-log', [BiometricAuditController::class, 'index']);
 
     // Feelback (lecture)
+    Route::get('/feelback/review-config', [ReviewConfigController::class, 'show']);
+    Route::get('/feelback/review-stats', [ReviewStatsController::class, 'index']);
+    Route::get('/feelback/review-submissions', [ReviewStatsController::class, 'submissions']);
     Route::get('/feelback/stats', [FeelbackStatsController::class, 'index']);
     Route::get('/feelback/entries', [FeelbackEntryController::class, 'index']);
     Route::get('/feelback/devices', [FeelbackDeviceController::class, 'index']);
