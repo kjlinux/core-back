@@ -1,41 +1,41 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\AdminOrderController;
+use App\Http\Controllers\Api\AdminSalesReportController;
+use App\Http\Controllers\Api\AttendanceController;
+use App\Http\Controllers\Api\AttendanceReportController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BiometricAuditController;
+use App\Http\Controllers\Api\BiometricDeviceController;
+use App\Http\Controllers\Api\BiometricInconsistencyController;
+use App\Http\Controllers\Api\CardController;
 use App\Http\Controllers\Api\CompanyController;
-use App\Http\Controllers\Api\SiteController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\EmployeeController;
-use App\Http\Controllers\Api\CardController;
-use App\Http\Controllers\Api\ScheduleController;
-use App\Http\Controllers\Api\HolidayController;
-use App\Http\Controllers\Api\AttendanceController;
-use App\Http\Controllers\Api\BiometricDeviceController;
 use App\Http\Controllers\Api\EnrollmentController;
-use App\Http\Controllers\Api\BiometricAuditController;
-use App\Http\Controllers\Api\BiometricInconsistencyController;
-use App\Http\Controllers\Api\FeelbackStatsController;
-use App\Http\Controllers\Api\FeelbackEntryController;
-use App\Http\Controllers\Api\FeelbackDeviceController;
 use App\Http\Controllers\Api\FeelbackAlertController;
-use App\Http\Controllers\Api\ProductController;
-use App\Http\Controllers\Api\OrderController;
-use App\Http\Controllers\Api\AdminOrderController;
-use App\Http\Controllers\Api\PaymentCallbackController;
-use App\Http\Controllers\Api\DashboardController;
-use App\Http\Controllers\Api\NotificationController;
-use App\Http\Controllers\Api\RfidDeviceController;
-use App\Http\Controllers\Api\MqttController;
-use App\Http\Controllers\Api\ForgotPasswordController;
-use App\Http\Controllers\Api\ResetPasswordController;
-use App\Http\Controllers\Api\AdminSalesReportController;
-use App\Http\Controllers\Api\AttendanceReportController;
+use App\Http\Controllers\Api\FeelbackDeviceController;
+use App\Http\Controllers\Api\FeelbackEntryController;
 use App\Http\Controllers\Api\FeelbackReportController;
-use App\Http\Controllers\Api\ReviewConfigController;
-use App\Http\Controllers\Api\PublicReviewController;
-use App\Http\Controllers\Api\ReviewStatsController;
-use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\FeelbackStatsController;
+use App\Http\Controllers\Api\ForgotPasswordController;
+use App\Http\Controllers\Api\HolidayController;
+use App\Http\Controllers\Api\MqttController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\PaymentCallbackController;
+use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\PublicReviewController;
+use App\Http\Controllers\Api\ResetPasswordController;
+use App\Http\Controllers\Api\ReviewConfigController;
+use App\Http\Controllers\Api\ReviewStatsController;
+use App\Http\Controllers\Api\RfidDeviceController;
+use App\Http\Controllers\Api\ScheduleController;
+use App\Http\Controllers\Api\SiteController;
+use App\Http\Controllers\Api\UserController;
+use Illuminate\Support\Facades\Route;
 
 // Public routes (sans auth)
 Route::prefix('public')->group(function () {
@@ -44,6 +44,7 @@ Route::prefix('public')->group(function () {
 });
 
 Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/auth/logout', [AuthController::class, 'logout']);
 Route::post('/auth/forgot-password', ForgotPasswordController::class);
 Route::post('/auth/reset-password', ResetPasswordController::class);
 Route::post('/payment/callback', [PaymentCallbackController::class, 'handle']);
@@ -54,7 +55,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // =============================================
     // Auth (tous les roles)
     // =============================================
-    Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/auth/refresh', [AuthController::class, 'refresh']);
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::put('/auth/profile', [ProfileController::class, 'update']);

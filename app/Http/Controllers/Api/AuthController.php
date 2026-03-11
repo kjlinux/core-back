@@ -15,11 +15,11 @@ class AuthController extends BaseApiController
     {
         $user = User::with('company')->where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             return $this->errorResponse('Identifiants incorrects', 401);
         }
 
-        if (!$user->is_active) {
+        if (! $user->is_active) {
             return $this->errorResponse('Compte desactive', 403);
         }
 
@@ -35,7 +35,11 @@ class AuthController extends BaseApiController
 
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        $user = $request->user('sanctum');
+
+        if ($user) {
+            $user->currentAccessToken()->delete();
+        }
 
         return $this->successResponse(null, 'Deconnexion reussie');
     }

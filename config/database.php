@@ -43,6 +43,13 @@ return [
             'transaction_mode' => 'DEFERRED',
         ],
 
+        'legacy' => [
+            'driver' => 'sqlite',
+            'database' => env('LEGACY_DB_PATH', database_path('legacy.sqlite')),
+            'prefix' => '',
+            'foreign_key_constraints' => false,
+        ],
+
         'mysql' => [
             'driver' => 'mysql',
             'url' => env('DB_URL'),
