@@ -123,8 +123,7 @@ class MqttListenRfidCommand extends Command
             return;
         }
 
-        $cardUid = $this->normalizeUid($rawUid);
-        $this->info("UID normalisé: {$rawUid} → {$cardUid}");
+        $cardUid = strtoupper($rawUid);
 
         $parts = explode('/', $topic);
         $uniqueId = $parts[3] ?? null;
@@ -243,18 +242,5 @@ class MqttListenRfidCommand extends Command
         }
 
         $this->mqtt->publish($responseTopic, config('mqtt.response_codes.accepted'), MqttClient::QOS_AT_LEAST_ONCE);
-    }
-
-    /**
-     * Normalise un UID RFID au format stocké en base : "1A:7B:91:AE"
-     * Accepte : "1A7B91AE", "1a:7b:91:ae", "1A-7B-91-AE", etc.
-     */
-    private function normalizeUid(string $rawUid): string
-    {
-        // Retirer tous les séparateurs existants
-        $clean = strtoupper(str_replace([':', '-', ' '], '', $rawUid));
-
-        // Réinsérer les deux-points toutes les 2 lettres : AABBCCDD → AA:BB:CC:DD
-        return implode(':', str_split($clean, 2));
     }
 }
