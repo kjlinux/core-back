@@ -15,6 +15,7 @@ use PhpMqtt\Client\MqttClient;
 class MqttListenRfidCommand extends Command
 {
     protected $signature = 'mqtt:listen-rfid';
+
     protected $description = 'Ecoute les capteurs RFID et traite les badges scannes';
 
     private ?MqttClient $mqtt = null;
@@ -48,7 +49,7 @@ class MqttListenRfidCommand extends Command
     {
         $host = config('mqtt.host');
         $port = (int) config('mqtt.port', 8883);
-        $clientId = config('mqtt.client_id', 'core-api') . '-rfid-' . uniqid();
+        $clientId = config('mqtt.client_id', 'core-api').'-rfid-'.uniqid();
 
         $this->mqtt = new MqttClient($host, $port, $clientId, MqttClient::MQTT_3_1_1);
 
@@ -78,7 +79,7 @@ class MqttListenRfidCommand extends Command
         $this->mqtt->connect($connectionSettings, true);
         $this->info('Connecte au broker MQTT.');
 
-        $topic = config('mqtt.topics.rfid') . '/+/event';
+        $topic = config('mqtt.topics.rfid').'/+/event';
         $this->info("Abonnement au topic: {$topic}");
 
         $this->mqtt->subscribe($topic, function (string $topic, string $message) {
@@ -93,47 +94,70 @@ class MqttListenRfidCommand extends Command
         $this->info("Message recu sur {$topic}: {$message}");
 
         $data = json_decode($message, true);
-        if (!$data || empty($data['card_uid'])) {
-            $this->warn('Message invalide: card_uid manquant');
+        if (! $data) {
+            $this->warn('Message invalide: JSON malformé');
+
             return;
         }
+
+        // Ignorer les messages de statut purs
+        if (isset($data['status']) && ! isset($data['card_uid']) && ! isset($data['uid'])) {
+            $this->info('Message de statut ignoré');
+
+            return;
+        }
+
+        // Support card_uid (format cible ESP) et uid (format legacy)
+        $rawUid = $data['card_uid'] ?? $data['uid'] ?? null;
+
+        if (empty($rawUid)) {
+            $this->warn('Message invalide: card_uid manquant');
+
+            return;
+        }
+
+        // Ignorer les messages sync/heartbeat qui ont uid mais pas de scan réel
+        if (! isset($data['card_uid']) && isset($data['timestamp'])) {
+            $this->info("Message sync ignoré (uid={$rawUid})");
+
+            return;
+        }
+
+        $cardUid = $this->normalizeUid($rawUid);
+        $this->info("UID normalisé: {$rawUid} → {$cardUid}");
 
         $parts = explode('/', $topic);
         $uniqueId = $parts[3] ?? null;
 
-        // Update device online status
         $device = RfidDevice::where('serial_number', $uniqueId)->first();
         if ($device) {
-            $device->update([
-                'is_online' => true,
-                'last_ping_at' => now(),
-            ]);
+            $device->update(['is_online' => true, 'last_ping_at' => now()]);
             event(new DeviceStatusUpdated('rfid', (string) $device->id, 'online', $data));
         }
 
-        $cardUid = $data['card_uid'];
-
         $responseTopic = str_replace('/event', '/response', $topic);
 
-        // Find card
         $card = RfidCard::where('uid', $cardUid)->first();
 
-        if (!$card) {
+        if (! $card) {
             $this->warn("Carte inconnue: {$cardUid}");
             $this->mqtt->publish($responseTopic, config('mqtt.response_codes.rejected'), MqttClient::QOS_AT_LEAST_ONCE);
+
             return;
         }
 
         if ($card->status !== 'active') {
             $this->warn("Carte inactive/bloquee: {$cardUid}");
             $this->mqtt->publish($responseTopic, config('mqtt.response_codes.refused'), MqttClient::QOS_AT_LEAST_ONCE);
+
             return;
         }
 
         $employee = $card->employee;
-        if (!$employee || !$employee->is_active) {
+        if (! $employee || ! $employee->is_active) {
             $this->warn("Employe inactif ou non assigne pour carte: {$cardUid}");
             $this->mqtt->publish($responseTopic, config('mqtt.response_codes.refused'), MqttClient::QOS_AT_LEAST_ONCE);
+
             return;
         }
 
@@ -150,6 +174,7 @@ class MqttListenRfidCommand extends Command
             $this->info("Double badge detecte pour {$employee->full_name}");
             $recentRecord->update(['is_double_badge' => true]);
             $this->mqtt->publish($responseTopic, config('mqtt.response_codes.accepted'), MqttClient::QOS_AT_LEAST_ONCE);
+
             return;
         }
 
@@ -171,7 +196,7 @@ class MqttListenRfidCommand extends Command
                 ->first();
 
             if ($schedule) {
-                $endTime = \Carbon\Carbon::parse($today . ' ' . $schedule->end_time);
+                $endTime = \Carbon\Carbon::parse($today.' '.$schedule->end_time);
                 if ($exitTime->lt($endTime)) {
                     $earlyMinutes = (int) $exitTime->diffInMinutes($endTime);
                 }
@@ -196,7 +221,7 @@ class MqttListenRfidCommand extends Command
                 ->first();
 
             if ($schedule) {
-                $startTime = \Carbon\Carbon::parse($today . ' ' . $schedule->start_time);
+                $startTime = \Carbon\Carbon::parse($today.' '.$schedule->start_time);
                 $tolerance = $schedule->late_tolerance ?? 0;
                 if ($entryTime->gt($startTime->addMinutes($tolerance))) {
                     $lateMinutes = (int) $entryTime->diffInMinutes($startTime);
@@ -218,5 +243,18 @@ class MqttListenRfidCommand extends Command
         }
 
         $this->mqtt->publish($responseTopic, config('mqtt.response_codes.accepted'), MqttClient::QOS_AT_LEAST_ONCE);
+    }
+
+    /**
+     * Normalise un UID RFID au format stocké en base : "1A:7B:91:AE"
+     * Accepte : "1A7B91AE", "1a:7b:91:ae", "1A-7B-91-AE", etc.
+     */
+    private function normalizeUid(string $rawUid): string
+    {
+        // Retirer tous les séparateurs existants
+        $clean = strtoupper(str_replace([':', '-', ' '], '', $rawUid));
+
+        // Réinsérer les deux-points toutes les 2 lettres : AABBCCDD → AA:BB:CC:DD
+        return implode(':', str_split($clean, 2));
     }
 }
