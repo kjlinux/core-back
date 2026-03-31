@@ -82,7 +82,11 @@ class BaseApiController extends Controller
         }
 
         if ($user->isTechnicien()) {
-            return $headerCompanyId ?: $user->company_id;
+            $resolved = $headerCompanyId ?: $user->company_id;
+            if (!$resolved) {
+                abort(403, 'Technicien: aucune entreprise active selectionnee.');
+            }
+            return $resolved;
         }
 
         return $user->company_id;

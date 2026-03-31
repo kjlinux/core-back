@@ -21,7 +21,17 @@ class CompanyController extends BaseApiController
             ->withCount('employees');
 
         $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
+        if ($user->isSuperAdmin()) {
+            // super_admin voit toutes les entreprises
+        } elseif ($user->isTechnicien()) {
+            // technicien voit toutes les entreprises (il intervient chez n'importe quel client)
+            // Si un X-Active-Company-Id est précisé, on filtre uniquement sur celle-là
+            $headerCompanyId = request()->header('X-Active-Company-Id');
+            if ($headerCompanyId) {
+                $query->where('id', $headerCompanyId);
+            }
+        } else {
+            // admin_enterprise et manager voient uniquement leur entreprise
             $query->where('id', $user->company_id);
         }
 

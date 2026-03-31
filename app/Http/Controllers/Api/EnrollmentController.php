@@ -20,8 +20,9 @@ class EnrollmentController extends BaseApiController
 
         $user = $request->user();
         if (!$user->isSuperAdmin()) {
-            $query->whereHas('employee', function ($q) use ($user) {
-                $q->where('company_id', $user->company_id);
+            $activeCompanyId = $this->resolveActiveCompanyId();
+            $query->whereHas('employee', function ($q) use ($activeCompanyId) {
+                $q->where('company_id', $activeCompanyId);
             });
         }
 

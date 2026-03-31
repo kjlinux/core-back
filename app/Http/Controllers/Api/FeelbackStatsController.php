@@ -15,14 +15,16 @@ class FeelbackStatsController extends BaseApiController
         $user = $request->user();
 
         if ($user->isSuperAdmin()) {
-            if ($request->filled('company_id')) {
-                $query->whereHas('site', function ($q) use ($request) {
-                    $q->where('company_id', $request->company_id);
+            $filterCompanyId = $request->input('company_id') ?: $this->resolveActiveCompanyId();
+            if ($filterCompanyId) {
+                $query->whereHas('site', function ($q) use ($filterCompanyId) {
+                    $q->where('company_id', $filterCompanyId);
                 });
             }
         } else {
-            $query->whereHas('site', function ($q) use ($user) {
-                $q->where('company_id', $user->company_id);
+            $activeCompanyId = $this->resolveActiveCompanyId();
+            $query->whereHas('site', function ($q) use ($activeCompanyId) {
+                $q->where('company_id', $activeCompanyId);
             });
         }
 
@@ -64,7 +66,7 @@ class FeelbackStatsController extends BaseApiController
         $user = $request->user();
         $siteQuery = Site::where('id', $agencyId);
         if (!$user->isSuperAdmin()) {
-            $siteQuery->where('company_id', $user->company_id);
+            $siteQuery->where('company_id', $this->resolveActiveCompanyId());
         }
         $site = $siteQuery->firstOrFail();
 
@@ -107,11 +109,12 @@ class FeelbackStatsController extends BaseApiController
         $siteQuery = Site::query();
 
         if ($user->isSuperAdmin()) {
-            if ($request->filled('company_id')) {
-                $siteQuery->where('company_id', $request->company_id);
+            $filterCompanyId = $request->input('company_id') ?: $this->resolveActiveCompanyId();
+            if ($filterCompanyId) {
+                $siteQuery->where('company_id', $filterCompanyId);
             }
         } else {
-            $siteQuery->where('company_id', $user->company_id);
+            $siteQuery->where('company_id', $this->resolveActiveCompanyId());
         }
 
         $sites = $siteQuery->get();
