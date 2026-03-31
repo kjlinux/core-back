@@ -41,7 +41,7 @@ class FirmwareController extends BaseApiController
     public function upload(Request $request): JsonResponse
     {
         $request->validate([
-            'file' => 'required|file|mimes:bin|max:10240',
+            'file' => 'required|file|mimetypes:application/octet-stream,application/macbinary,application/x-binary,application/x-msdownload,application/x-dosexec,application/x-executable,text/plain|max:10240',
             'version' => 'required|string|max:20',
             'device_kind' => 'required|in:rfid,biometric',
             'description' => 'nullable|string|max:500',

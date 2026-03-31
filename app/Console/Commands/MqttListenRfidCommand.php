@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Events\AttendanceRecorded;
+use App\Events\CardScanned;
 use App\Events\DeviceStatusUpdated;
 use App\Models\AttendanceRecord;
 use App\Models\OtaUpdateLog;
@@ -135,6 +136,16 @@ class MqttListenRfidCommand extends Command
         $uniqueId = $parts[3] ?? null;
 
         $device = RfidDevice::where('serial_number', $uniqueId)->first();
+
+        // Commande SCAN : le terminal renvoie le UID pour enregistrement d'une nouvelle carte
+        // Le payload contient type="scan" — on broadcast le UID sans créer de pointage
+        if (($data['type'] ?? null) === 'scan') {
+            $this->info("Scan d'enregistrement recu: UID={$cardUid}");
+            if ($device) {
+                event(new CardScanned($cardUid, (string) $device->id));
+            }
+            return;
+        }
         if ($device) {
             $updateData = ['is_online' => true, 'last_ping_at' => now()];
             // Synchroniser la version firmware si le terminal la reporte

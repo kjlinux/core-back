@@ -28,6 +28,7 @@ return [
             'WAKE_UP' => '0x1080A0',
             'SLEEP'   => '0x1080B0',
             'STATUS'  => '0x100010',
+            'SCAN'    => '0x100030',
         ],
         'biometric' => [
             'RESET'   => '0x108070',
