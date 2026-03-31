@@ -29,6 +29,8 @@
           <span class="badge badge-super">Super Administrateur</span>
         @elseif($user->role === 'admin_enterprise')
           <span class="badge badge-admin">Administrateur Entreprise</span>
+        @elseif($user->role === 'technicien')
+          <span class="badge badge-admin">Technicien</span>
         @else
           <span class="badge badge-manager">Manager</span>
         @endif

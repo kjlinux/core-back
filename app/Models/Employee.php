@@ -28,12 +28,16 @@ class Employee extends Model
         'is_active',
         'hire_date',
         'biometric_enrolled',
+        'device_fingerprint',
+        'device_info',
+        'device_enrolled_at',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'biometric_enrolled' => 'boolean',
         'hire_date' => 'date',
+        'device_enrolled_at' => 'datetime',
     ];
 
     public function site(): BelongsTo

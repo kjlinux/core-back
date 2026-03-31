@@ -21,6 +21,8 @@
           <span class="badge badge-super">Super Administrateur</span>
         @elseif($user->role === 'admin_enterprise')
           <span class="badge badge-admin">Administrateur Entreprise</span>
+        @elseif($user->role === 'technicien')
+          <span class="badge badge-admin">Technicien</span>
         @else
           <span class="badge badge-manager">Manager</span>
         @endif
@@ -62,6 +64,13 @@
   En tant qu'<strong>Administrateur Entreprise</strong>{{ $user->company ? ' de ' . $user->company->name : '' }},
   vous gerez les sites, departements, employes, dispositifs et rapports de votre entreprise sur les modules
   Pointage RFID, Biometrique, Feelback et Marketplace.
+</p>
+@elseif($user->role === 'technicien')
+<p class="text" style="font-size:13px; color:#64748b;">
+  En tant que <strong>Technicien</strong>{{ $user->company ? ' chez ' . $user->company->name : '' }},
+  vous etes charge de la mise en service des comptes clients : creation des entreprises, sites,
+  departements, employes, attribution des cartes RFID, enrolements biometriques, QR codes et
+  mises a jour firmware des terminaux.
 </p>
 @else
 <p class="text" style="font-size:13px; color:#64748b;">

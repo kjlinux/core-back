@@ -20,7 +20,7 @@ class UpdateUserRequest extends FormRequest
             'last_name' => ['sometimes', 'string', 'max:255'],
             'email' => ['sometimes', 'email', 'unique:users,email,' . $userId],
             'phone' => ['nullable', 'string', 'max:20'],
-            'role' => ['sometimes', 'string', 'in:super_admin,admin_enterprise,manager'],
+            'role' => ['sometimes', 'string', 'in:super_admin,admin_enterprise,manager,technicien'],
             'company_id' => ['nullable', 'exists:companies,id'],
         ];
     }

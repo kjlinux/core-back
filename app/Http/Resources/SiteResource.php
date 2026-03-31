@@ -15,11 +15,14 @@ class SiteResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => (string) $this->id,
-            'companyId' => (string) $this->company_id,
-            'name' => $this->name,
-            'address' => $this->address,
-            'departments' => DepartmentResource::collection($this->whenLoaded('departments')),
+            'id'             => (string) $this->id,
+            'companyId'      => (string) $this->company_id,
+            'name'           => $this->name,
+            'address'        => $this->address,
+            'latitude'       => $this->latitude,
+            'longitude'      => $this->longitude,
+            'geofenceRadius' => $this->geofence_radius,
+            'departments'    => DepartmentResource::collection($this->whenLoaded('departments')),
         ];
     }
 }

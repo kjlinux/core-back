@@ -75,15 +75,15 @@ class UserController extends BaseApiController
 
     /**
      * Create a new user.
-     * super_admin can create any role; admin_enterprise can only create managers in their company.
+     * super_admin can create any role; admin_enterprise and technicien can only create managers in their company.
      */
     public function store(StoreUserRequest $request): JsonResponse
     {
         $authUser = $request->user();
         $data = $request->validated();
 
-        // admin_enterprise can only create managers in their own company
-        if ($authUser->isAdminEnterprise()) {
+        // admin_enterprise and technicien can only create managers in their own company
+        if ($authUser->isAdminEnterprise() || $authUser->isTechnicien()) {
             if ($data['role'] !== 'manager') {
                 return $this->errorResponse('Vous ne pouvez creer que des managers', 403);
             }
@@ -103,7 +103,7 @@ class UserController extends BaseApiController
 
     /**
      * Update an existing user.
-     * admin_enterprise can only edit managers in their company and cannot promote them.
+     * admin_enterprise and technicien can only edit managers in their company and cannot promote them.
      */
     public function update(UpdateUserRequest $request, string $id): JsonResponse
     {
@@ -111,7 +111,7 @@ class UserController extends BaseApiController
         $user = User::findOrFail($id);
         $data = $request->validated();
 
-        if ($authUser->isAdminEnterprise()) {
+        if ($authUser->isAdminEnterprise() || $authUser->isTechnicien()) {
             // Cannot edit users outside their company
             if ($user->company_id !== $authUser->company_id) {
                 return $this->errorResponse('Acces non autorise', 403);
@@ -148,7 +148,7 @@ class UserController extends BaseApiController
         $authUser = $request->user();
         $user = User::findOrFail($id);
 
-        if ($authUser->isAdminEnterprise()) {
+        if ($authUser->isAdminEnterprise() || $authUser->isTechnicien()) {
             if ($user->company_id !== $authUser->company_id || $user->role !== 'manager') {
                 return $this->errorResponse('Acces non autorise', 403);
             }
@@ -173,7 +173,7 @@ class UserController extends BaseApiController
         $authUser = $request->user();
         $user = User::findOrFail($id);
 
-        if ($authUser->isAdminEnterprise()) {
+        if ($authUser->isAdminEnterprise() || $authUser->isTechnicien()) {
             if ($user->company_id !== $authUser->company_id || $user->role !== 'manager') {
                 return $this->errorResponse('Acces non autorise', 403);
             }

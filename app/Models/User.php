@@ -64,4 +64,19 @@ class User extends Authenticatable
     {
         return $this->role === 'manager';
     }
+
+    public function isTechnicien(): bool
+    {
+        return $this->role === 'technicien';
+    }
+
+    public function isSetupRole(): bool
+    {
+        return in_array($this->role, ['super_admin', 'technicien']);
+    }
+
+    public function isAdminOrAbove(): bool
+    {
+        return in_array($this->role, ['super_admin', 'admin_enterprise', 'technicien']);
+    }
 }

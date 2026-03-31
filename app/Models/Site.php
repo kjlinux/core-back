@@ -16,6 +16,15 @@ class Site extends Model
         'company_id',
         'name',
         'address',
+        'latitude',
+        'longitude',
+        'geofence_radius',
+    ];
+
+    protected $casts = [
+        'latitude' => 'float',
+        'longitude' => 'float',
+        'geofence_radius' => 'integer',
     ];
 
     public function departments(): HasMany

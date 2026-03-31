@@ -1,6 +1,10 @@
 <?php
 
 use App\Http\Controllers\Api\AdminOrderController;
+use App\Http\Controllers\Api\QrCodeController;
+use App\Http\Controllers\Api\QrAttendanceController;
+use App\Http\Controllers\Api\EmployeeDeviceController;
+use App\Http\Controllers\Api\FirmwareController;
 use App\Http\Controllers\Api\AdminSalesReportController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AttendanceReportController;
@@ -61,14 +65,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/auth/password', [ProfileController::class, 'changePassword']);
 
     // =============================================
-    // Super Admin uniquement
+    // Super Admin + Technicien (setup/onboarding)
     // =============================================
-    Route::middleware('role:super_admin')->group(function () {
+    Route::middleware('role:super_admin,technicien')->group(function () {
         // Companies CUD
         Route::post('/companies', [CompanyController::class, 'store']);
         Route::put('/companies/{id}', [CompanyController::class, 'update']);
         Route::patch('/companies/{id}/toggle-active', [CompanyController::class, 'toggleActive']);
 
+    });
+
+    // =============================================
+    // Super Admin uniquement
+    // =============================================
+    Route::middleware('role:super_admin')->group(function () {
         // Marketplace products CUD
         Route::post('/marketplace/products', [ProductController::class, 'store']);
         Route::put('/marketplace/products/{id}', [ProductController::class, 'update']);
@@ -88,9 +98,9 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // =============================================
-    // Admin (super_admin + admin_enterprise)
+    // Admin (super_admin + admin_enterprise + technicien)
     // =============================================
-    Route::middleware('role:super_admin,admin_enterprise')->group(function () {
+    Route::middleware('role:super_admin,admin_enterprise,technicien')->group(function () {
         // Sites CUD
         Route::post('/sites', [SiteController::class, 'store']);
         Route::put('/sites/{id}', [SiteController::class, 'update']);
@@ -138,6 +148,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/biometric/enrollments/enroll', [EnrollmentController::class, 'enroll']);
         Route::delete('/biometric/enrollments/{id}', [EnrollmentController::class, 'destroy']);
 
+        // User management - lecture et gestion
+        Route::get('/users', [UserController::class, 'index']);
+        Route::post('/users', [UserController::class, 'store']);
+        Route::get('/users/{id}', [UserController::class, 'show']);
+        Route::put('/users/{id}', [UserController::class, 'update']);
+        Route::patch('/users/{id}/toggle-active', [UserController::class, 'toggleActive']);
+        Route::post('/users/{id}/reset-password', [UserController::class, 'resetPassword']);
+    });
+
+    // =============================================
+    // Admin sans technicien (super_admin + admin_enterprise uniquement)
+    // Feelback et marketplace write - technicien n'y a pas acces
+    // =============================================
+    Route::middleware('role:super_admin,admin_enterprise')->group(function () {
         // Feelback devices CUD + alert settings
         Route::post('/feelback/devices', [FeelbackDeviceController::class, 'store']);
         Route::put('/feelback/devices/{id}', [FeelbackDeviceController::class, 'update']);
@@ -147,14 +171,6 @@ Route::middleware('auth:sanctum')->group(function () {
         // Review QR config CUD
         Route::post('/feelback/review-config', [ReviewConfigController::class, 'store']);
         Route::post('/feelback/review-config/regenerate-token', [ReviewConfigController::class, 'regenerateToken']);
-
-        // User management - lecture et gestion
-        Route::get('/users', [UserController::class, 'index']);
-        Route::post('/users', [UserController::class, 'store']);
-        Route::get('/users/{id}', [UserController::class, 'show']);
-        Route::put('/users/{id}', [UserController::class, 'update']);
-        Route::patch('/users/{id}/toggle-active', [UserController::class, 'toggleActive']);
-        Route::post('/users/{id}/reset-password', [UserController::class, 'resetPassword']);
     });
 
     // =============================================
@@ -212,29 +228,85 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/biometric/inconsistencies', [BiometricInconsistencyController::class, 'index']);
     Route::get('/biometric/audit-log', [BiometricAuditController::class, 'index']);
 
-    // Feelback (lecture)
-    Route::get('/feelback/review-config', [ReviewConfigController::class, 'show']);
-    Route::get('/feelback/review-stats', [ReviewStatsController::class, 'index']);
-    Route::get('/feelback/review-submissions', [ReviewStatsController::class, 'submissions']);
-    Route::get('/feelback/stats', [FeelbackStatsController::class, 'index']);
-    Route::get('/feelback/entries', [FeelbackEntryController::class, 'index']);
-    Route::get('/feelback/devices', [FeelbackDeviceController::class, 'index']);
-    Route::get('/feelback/devices/{id}', [FeelbackDeviceController::class, 'show']);
-    Route::get('/feelback/alerts', [FeelbackAlertController::class, 'index']);
-    Route::get('/feelback/stats/agency/{agencyId}', [FeelbackStatsController::class, 'byAgency']);
-    Route::get('/feelback/comparison', [FeelbackStatsController::class, 'comparison']);
-    Route::get('/feelback/reports', [FeelbackReportController::class, 'index']);
+    // Feelback + Marketplace (lecture) - technicien n'y a pas acces
+    Route::middleware('role:super_admin,admin_enterprise,manager')->group(function () {
+        Route::get('/feelback/review-config', [ReviewConfigController::class, 'show']);
+        Route::get('/feelback/review-stats', [ReviewStatsController::class, 'index']);
+        Route::get('/feelback/review-submissions', [ReviewStatsController::class, 'submissions']);
+        Route::get('/feelback/stats', [FeelbackStatsController::class, 'index']);
+        Route::get('/feelback/entries', [FeelbackEntryController::class, 'index']);
+        Route::get('/feelback/devices', [FeelbackDeviceController::class, 'index']);
+        Route::get('/feelback/devices/{id}', [FeelbackDeviceController::class, 'show']);
+        Route::get('/feelback/alerts', [FeelbackAlertController::class, 'index']);
+        Route::get('/feelback/stats/agency/{agencyId}', [FeelbackStatsController::class, 'byAgency']);
+        Route::get('/feelback/comparison', [FeelbackStatsController::class, 'comparison']);
+        Route::get('/feelback/reports', [FeelbackReportController::class, 'index']);
 
-    // Marketplace products (lecture)
-    Route::get('/marketplace/products', [ProductController::class, 'index']);
-    Route::get('/marketplace/products/{id}', [ProductController::class, 'show']);
+        // Marketplace products (lecture)
+        Route::get('/marketplace/products', [ProductController::class, 'index']);
+        Route::get('/marketplace/products/{id}', [ProductController::class, 'show']);
 
-    // Orders (tous roles - scope par company via BelongsToCompany)
-    Route::post('/orders', [OrderController::class, 'store']);
-    Route::get('/orders', [OrderController::class, 'index']);
-    Route::get('/orders/{id}', [OrderController::class, 'show']);
-    Route::patch('/orders/{id}/cancel', [OrderController::class, 'cancel']);
-    Route::post('/orders/{id}/payment', [OrderController::class, 'initiatePayment']);
+        // Orders
+        Route::post('/orders', [OrderController::class, 'store']);
+        Route::get('/orders', [OrderController::class, 'index']);
+        Route::get('/orders/{id}', [OrderController::class, 'show']);
+        Route::patch('/orders/{id}/cancel', [OrderController::class, 'cancel']);
+        Route::post('/orders/{id}/payment', [OrderController::class, 'initiatePayment']);
+    });
+
+    // =============================================
+    // QR Code Attendance
+    // =============================================
+    Route::middleware('role:super_admin,admin_enterprise,technicien')->group(function () {
+        // QR de site : génération + révocation
+        Route::post('/qr-codes/generate', [QrCodeController::class, 'generate']);
+        Route::delete('/qr-codes/{id}', [QrCodeController::class, 'revoke']);
+
+        // Enrôlement des téléphones employés
+        Route::post('/employees/device/enroll', [EmployeeDeviceController::class, 'enroll']);
+        Route::delete('/employees/{id}/device', [EmployeeDeviceController::class, 'revoke']);
+    });
+
+    // QR Code lecture (tous roles authentifiés)
+    Route::get('/qr-codes', [QrCodeController::class, 'index']);
+    Route::get('/qr-codes/stats', [QrCodeController::class, 'stats']);
+    Route::get('/qr-codes/{id}', [QrCodeController::class, 'show']);
+
+    // Scan QR (public — depuis le téléphone de l'employé, sans auth requise)
+    Route::get('/qr-attendance', [QrAttendanceController::class, 'index']);
+    Route::post('/qr-attendance/scan', [QrAttendanceController::class, 'scan']);
+
+    // Identifier si un appareil est enrôlé (utilisé par la page de scan mobile)
+    Route::post('/employees/device/identify', [EmployeeDeviceController::class, 'identify']);
+
+    // =============================================
+    // Firmware OTA
+    // =============================================
+    Route::middleware('role:super_admin,admin_enterprise,technicien')->group(function () {
+        // Lecture
+        Route::get('/firmware/versions', [FirmwareController::class, 'versions']);
+        Route::get('/firmware/versions/{id}', [FirmwareController::class, 'showVersion']);
+        Route::get('/firmware/devices/status', [FirmwareController::class, 'deviceStatuses']);
+        Route::get('/firmware/logs', [FirmwareController::class, 'logs']);
+
+        // Mise à jour en masse + progression (admin_enterprise, technicien, super_admin)
+        Route::post('/firmware/trigger-company-update', [FirmwareController::class, 'triggerCompanyUpdate']);
+        Route::get('/firmware/company-update-progress', [FirmwareController::class, 'companyUpdateProgress']);
+        Route::post('/firmware/retry-failed', [FirmwareController::class, 'retryFailed']);
+
+        // Ecriture : super_admin + technicien seulement
+        Route::middleware('role:super_admin,technicien')->group(function () {
+            Route::post('/firmware/versions', [FirmwareController::class, 'upload']);
+            Route::delete('/firmware/versions/{id}', [FirmwareController::class, 'deleteVersion']);
+            Route::patch('/firmware/versions/{id}/auto-update', [FirmwareController::class, 'setAutoUpdate']);
+            Route::post('/firmware/update', [FirmwareController::class, 'triggerUpdate']);
+        });
+
+        // Publication + notification : super_admin uniquement
+        Route::middleware('role:super_admin')->group(function () {
+            Route::patch('/firmware/versions/{id}/publish', [FirmwareController::class, 'publish']);
+        });
+    });
 
     // Dashboard
     Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
