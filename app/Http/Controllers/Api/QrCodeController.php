@@ -40,12 +40,19 @@ class QrCodeController extends BaseApiController
      */
     public function generate(Request $request): JsonResponse
     {
+        $user = auth()->user();
+
         $request->validate([
-            'site_id' => 'required|uuid|exists:sites,id',
-            'label' => 'nullable|string|max:100',
+            'site_id'    => 'required|uuid|exists:sites,id',
+            'label'      => 'nullable|string|max:100',
+            'company_id' => $user->isSuperAdmin() ? 'required|uuid|exists:companies,id' : 'nullable',
         ]);
 
         $data = $this->enforceCompanyId(['site_id' => $request->input('site_id')]);
+
+        if ($user->isSuperAdmin()) {
+            $data['company_id'] = $request->input('company_id');
+        }
 
         // Désactiver l'ancien QR du site
         QrCode::where('site_id', $data['site_id'])->update(['is_active' => false]);
