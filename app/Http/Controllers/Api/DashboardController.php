@@ -24,7 +24,7 @@ class DashboardController extends BaseApiController
     {
         $user = auth()->user();
         $isSuperAdmin = $user->isSuperAdmin();
-        $companyId = $user->company_id;
+        $companyId = $isSuperAdmin ? null : $this->resolveActiveCompanyId();
 
         $activeCompanies = $isSuperAdmin
             ? Company::where('is_active', true)->count()
@@ -130,7 +130,7 @@ class DashboardController extends BaseApiController
     {
         $user = auth()->user();
         $isSuperAdmin = $user->isSuperAdmin();
-        $companyId = $user->company_id;
+        $companyId = $isSuperAdmin ? null : $this->resolveActiveCompanyId();
 
         $period = $request->input('period', 'month');
 
@@ -207,7 +207,7 @@ class DashboardController extends BaseApiController
     {
         $user = auth()->user();
         $isSuperAdmin = $user->isSuperAdmin();
-        $companyId = $user->company_id;
+        $companyId = $isSuperAdmin ? null : $this->resolveActiveCompanyId();
 
         // Attendance trend — last 7 days
         $attendanceTrend = [];

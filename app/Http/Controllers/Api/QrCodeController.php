@@ -86,19 +86,20 @@ class QrCodeController extends BaseApiController
         $attendanceQuery = \App\Models\QrAttendanceRecord::query();
         $qrQuery = QrCode::query();
 
-        if (!$user->isSuperAdmin() && $user->company_id) {
-            $attendanceQuery->where('company_id', $user->company_id);
-            $qrQuery->where('company_id', $user->company_id);
+        $activeCompanyId = $user->isSuperAdmin() ? null : $this->resolveActiveCompanyId();
+        if ($activeCompanyId) {
+            $attendanceQuery->where('company_id', $activeCompanyId);
+            $qrQuery->where('company_id', $activeCompanyId);
         }
 
         $totalEmployees = \App\Models\Employee::when(
-            !$user->isSuperAdmin() && $user->company_id,
-            fn($q) => $q->where('company_id', $user->company_id)
+            $activeCompanyId,
+            fn($q) => $q->where('company_id', $activeCompanyId)
         )->where('is_active', true)->count();
 
         $enrolledDevices = \App\Models\Employee::when(
-            !$user->isSuperAdmin() && $user->company_id,
-            fn($q) => $q->where('company_id', $user->company_id)
+            $activeCompanyId,
+            fn($q) => $q->where('company_id', $activeCompanyId)
         )->whereNotNull('device_fingerprint')->count();
 
         $scansToday = (clone $attendanceQuery)->whereDate('date', today())->count();

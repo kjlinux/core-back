@@ -15,7 +15,8 @@ class BiometricAuditController extends BaseApiController
 
         $user = $request->user();
         if (!$user->isSuperAdmin()) {
-            $companyUserIds = \App\Models\User::where('company_id', $user->company_id)->pluck('id');
+            $activeCompanyId = $this->resolveActiveCompanyId();
+            $companyUserIds = \App\Models\User::where('company_id', $activeCompanyId)->pluck('id');
             $query->whereIn('user_id', $companyUserIds);
         }
 

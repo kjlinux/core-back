@@ -35,7 +35,7 @@ class AttendanceController extends BaseApiController
 
         $employeeQuery = Employee::where('is_active', true);
         $user = $request->user();
-        $companyId = $user->isSuperAdmin() ? $request->input('company_id') : $user->company_id;
+        $companyId = $user->isSuperAdmin() ? $request->input('company_id') : $this->resolveActiveCompanyId();
         if ($companyId) {
             $employeeQuery->where('company_id', $companyId);
         }
@@ -227,7 +227,7 @@ class AttendanceController extends BaseApiController
 
         $employeeQuery = Employee::where('is_active', true);
         $user = $request->user();
-        $bioCompanyId = $user->isSuperAdmin() ? $request->input('company_id') : $user->company_id;
+        $bioCompanyId = $user->isSuperAdmin() ? $request->input('company_id') : $this->resolveActiveCompanyId();
         if ($bioCompanyId) {
             $employeeQuery->where('company_id', $bioCompanyId);
         }
@@ -263,7 +263,7 @@ class AttendanceController extends BaseApiController
     private function applyLocationFilters($query, Request $request): void
     {
         $user = $request->user();
-        $companyId = $user->isSuperAdmin() ? $request->input('company_id') : $user->company_id;
+        $companyId = $user->isSuperAdmin() ? $request->input('company_id') : $this->resolveActiveCompanyId();
 
         if ($companyId || $request->input('site_id') || $request->input('department_id')) {
             $query->whereHas('employee', function ($q) use ($companyId, $request) {

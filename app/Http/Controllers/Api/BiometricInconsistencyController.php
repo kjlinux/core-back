@@ -14,10 +14,12 @@ class BiometricInconsistencyController extends BaseApiController
     {
         $user = $request->user();
 
-        $employeeScope = function ($query) use ($user) {
-            if (!$user->isSuperAdmin()) {
-                $query->whereHas('employee', function ($q) use ($user) {
-                    $q->where('company_id', $user->company_id);
+        $activeCompanyId = $user->isSuperAdmin() ? null : $this->resolveActiveCompanyId();
+
+        $employeeScope = function ($query) use ($activeCompanyId) {
+            if ($activeCompanyId) {
+                $query->whereHas('employee', function ($q) use ($activeCompanyId) {
+                    $q->where('company_id', $activeCompanyId);
                 });
             }
         };
@@ -30,9 +32,9 @@ class BiometricInconsistencyController extends BaseApiController
             ->groupBy('employee_id', 'date')
             ->havingRaw('COUNT(*) > 1');
 
-        if (!$user->isSuperAdmin()) {
-            $baseQuery->whereIn('employee_id', function ($q) use ($user) {
-                $q->select('id')->from('employees')->where('company_id', $user->company_id);
+        if ($activeCompanyId) {
+            $baseQuery->whereIn('employee_id', function ($q) use ($activeCompanyId) {
+                $q->select('id')->from('employees')->where('company_id', $activeCompanyId);
             });
         }
 
