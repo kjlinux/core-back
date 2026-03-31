@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('file_path')->nullable();
             $table->unsignedBigInteger('file_size')->nullable();
             $table->boolean('is_auto_update')->default(false);
-            $table->foreignUuid('uploaded_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('uploaded_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
             $table->unique(['version', 'device_kind']);
