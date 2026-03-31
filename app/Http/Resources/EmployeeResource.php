@@ -33,6 +33,9 @@ class EmployeeResource extends JsonResource
                 fn () => $this->rfidCard ? (string) $this->rfidCard->id : null
             ),
             'biometricEnrolled' => (bool) $this->biometric_enrolled,
+            'deviceFingerprint' => $this->device_fingerprint,
+            'deviceInfo' => $this->device_info,
+            'deviceEnrolledAt' => $this->device_enrolled_at?->toISOString(),
             'createdAt' => $this->created_at?->toISOString(),
         ];
     }
