@@ -65,13 +65,45 @@ class BaseApiController extends Controller
     }
 
     /**
+     * Résout le company_id effectif pour la requête en cours.
+     * - super_admin : utilise X-Active-Company-Id si fourni, sinon null (voit tout)
+     * - technicien  : utilise X-Active-Company-Id s'il l'a sélectionné, sinon son company_id
+     * - autres rôles : company_id fixe de l'utilisateur
+     */
+    protected function resolveActiveCompanyId(): ?string
+    {
+        $user = auth()->user();
+        if (!$user) return null;
+
+        $headerCompanyId = request()->header('X-Active-Company-Id');
+
+        if ($user->isSuperAdmin()) {
+            return $headerCompanyId ?: null;
+        }
+
+        if ($user->isTechnicien()) {
+            return $headerCompanyId ?: $user->company_id;
+        }
+
+        return $user->company_id;
+    }
+
+    /**
      * Auto-inject company_id from authenticated user for non-super_admin.
      */
     protected function enforceCompanyId(array $data): array
     {
         $user = auth()->user();
-        if ($user && !$user->isSuperAdmin() && $user->company_id) {
-            $data['company_id'] = $user->company_id;
+        if (!$user) return $data;
+
+        if ($user->isSuperAdmin()) {
+            // super_admin peut explicitement passer un company_id
+            return $data;
+        }
+
+        $activeCompanyId = $this->resolveActiveCompanyId();
+        if ($activeCompanyId) {
+            $data['company_id'] = $activeCompanyId;
         }
 
         return $data;
@@ -79,20 +111,25 @@ class BaseApiController extends Controller
 
     /**
      * Scope a query by company_id for non-super_admin users.
-     * Super admins can optionally filter by company_id via request param.
+     * Super admins can optionally filter by company_id via request param or X-Active-Company-Id header.
      */
     protected function scopeByCompany($query, string $companyIdColumn = 'company_id'): void
     {
         $user = auth()->user();
         if (!$user) return;
 
+        $activeCompanyId = $this->resolveActiveCompanyId();
+
         if ($user->isSuperAdmin()) {
-            $requestCompanyId = request()->input('company_id');
-            if ($requestCompanyId) {
-                $query->where($companyIdColumn, $requestCompanyId);
+            // Filtre optionnel via query param ou header
+            $paramCompanyId = request()->input('company_id') ?: $activeCompanyId;
+            if ($paramCompanyId) {
+                $query->where($companyIdColumn, $paramCompanyId);
             }
         } else {
-            $query->where($companyIdColumn, $user->company_id);
+            if ($activeCompanyId) {
+                $query->where($companyIdColumn, $activeCompanyId);
+            }
         }
     }
 }

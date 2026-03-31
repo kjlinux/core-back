@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AdminOrderController;
 use App\Http\Controllers\Api\QrCodeController;
 use App\Http\Controllers\Api\QrAttendanceController;
 use App\Http\Controllers\Api\EmployeeDeviceController;
+use App\Http\Controllers\Api\EnrollSessionController;
 use App\Http\Controllers\Api\FirmwareController;
 use App\Http\Controllers\Api\AdminSalesReportController;
 use App\Http\Controllers\Api\AttendanceController;
@@ -53,6 +54,11 @@ Route::post('/auth/forgot-password', ForgotPasswordController::class);
 Route::post('/auth/reset-password', ResetPasswordController::class);
 Route::post('/payment/callback', [PaymentCallbackController::class, 'handle']);
 
+// Broadcasting auth (Reverb/Pusher private channels via Bearer token)
+Route::post('/broadcasting/auth', function (\Illuminate\Http\Request $request) {
+    return \Illuminate\Support\Facades\Broadcast::auth($request);
+})->middleware('auth:sanctum');
+
 // Authenticated routes
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -63,6 +69,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::put('/auth/profile', [ProfileController::class, 'update']);
     Route::put('/auth/password', [ProfileController::class, 'changePassword']);
+    Route::post('/auth/select-company', [AuthController::class, 'selectCompany']);
 
     // =============================================
     // Super Admin + Technicien (setup/onboarding)
@@ -265,6 +272,10 @@ Route::middleware('auth:sanctum')->group(function () {
         // Enrôlement des téléphones employés
         Route::post('/employees/device/enroll', [EmployeeDeviceController::class, 'enroll']);
         Route::delete('/employees/{id}/device', [EmployeeDeviceController::class, 'revoke']);
+
+        // Sessions d'enrôlement QR (admin crée + poll)
+        Route::post('/enroll-session', [EnrollSessionController::class, 'create']);
+        Route::get('/enroll-session/{token}', [EnrollSessionController::class, 'status']);
     });
 
     // QR Code lecture (tous roles authentifiés)
@@ -278,6 +289,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Identifier si un appareil est enrôlé (utilisé par la page de scan mobile)
     Route::post('/employees/device/identify', [EmployeeDeviceController::class, 'identify']);
+
+    // Sessions d'enrôlement QR (soumission depuis le téléphone — sans auth)
+    Route::post('/enroll-session/{token}/submit', [EnrollSessionController::class, 'submit']);
 
     // =============================================
     // Firmware OTA

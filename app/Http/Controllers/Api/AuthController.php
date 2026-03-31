@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Resources\UserResource;
+use App\Models\Company;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -62,5 +63,29 @@ class AuthController extends BaseApiController
     public function me(Request $request): JsonResponse
     {
         return $this->resourceResponse(new UserResource($request->user()->load('company')));
+    }
+
+    /**
+     * Permet au technicien de valider qu'une entreprise existe et retourne ses infos.
+     * Le frontend stocke ensuite l'ID et l'envoie dans X-Active-Company-Id.
+     */
+    public function selectCompany(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user->isTechnicien() && !$user->isSuperAdmin()) {
+            return $this->errorResponse('Action reservee aux techniciens et super admins', 403);
+        }
+
+        $request->validate([
+            'company_id' => 'required|exists:companies,id',
+        ]);
+
+        $company = Company::findOrFail($request->input('company_id'));
+
+        return $this->successResponse([
+            'companyId'   => (string) $company->id,
+            'companyName' => $company->name,
+        ], 'Entreprise selectionnee');
     }
 }

@@ -96,7 +96,11 @@ class UserController extends BaseApiController
         $user = User::create($data);
         $user->load('company');
 
-        Mail::to($user->email)->send(new UserCreatedMail($user, $plainPassword));
+        try {
+            Mail::to($user->email)->send(new UserCreatedMail($user, $plainPassword));
+        } catch (\Exception $e) {
+            \Log::error('UserCreatedMail failed for user ' . $user->id . ': ' . $e->getMessage());
+        }
 
         return $this->resourceResponse(new UserResource($user), 'Utilisateur cree avec succes', 201);
     }
