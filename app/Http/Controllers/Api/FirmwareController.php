@@ -99,6 +99,16 @@ class FirmwareController extends BaseApiController
         $deviceKind = $request->input('device_kind');
         $statuses = [];
 
+        // Version cible = dernière version publiée (auto-update ou non) par type
+        $latestRfid = FirmwareVersion::where('device_kind', 'rfid')
+            ->where('is_published', true)
+            ->orderByDesc('created_at')
+            ->first();
+        $latestBio = FirmwareVersion::where('device_kind', 'biometric')
+            ->where('is_published', true)
+            ->orderByDesc('created_at')
+            ->first();
+
         if (!$deviceKind || $deviceKind === 'rfid') {
             $rfidQuery = RfidDevice::query();
             $this->scopeByCompany($rfidQuery);
@@ -111,14 +121,14 @@ class FirmwareController extends BaseApiController
                     ->first();
 
                 $statuses[] = [
-                    'deviceId' => (string) $device->id,
-                    'deviceName' => $device->name,
-                    'deviceKind' => 'rfid',
+                    'deviceId'       => (string) $device->id,
+                    'deviceName'     => $device->name,
+                    'deviceKind'     => 'rfid',
                     'currentVersion' => $device->firmware_version ?? 'inconnue',
-                    'targetVersion' => null,
-                    'updateStatus' => $lastLog?->status ?? 'skipped',
-                    'lastCheckedAt' => $device->last_ping_at?->toISOString() ?? now()->toISOString(),
-                    'lastUpdatedAt' => $lastLog?->completed_at?->toISOString(),
+                    'targetVersion'  => $latestRfid?->version,
+                    'updateStatus'   => $lastLog?->status ?? 'skipped',
+                    'lastCheckedAt'  => $device->last_ping_at?->toISOString() ?? now()->toISOString(),
+                    'lastUpdatedAt'  => $lastLog?->completed_at?->toISOString(),
                 ];
             }
         }
@@ -135,14 +145,14 @@ class FirmwareController extends BaseApiController
                     ->first();
 
                 $statuses[] = [
-                    'deviceId' => (string) $device->id,
-                    'deviceName' => $device->name,
-                    'deviceKind' => 'biometric',
+                    'deviceId'       => (string) $device->id,
+                    'deviceName'     => $device->name,
+                    'deviceKind'     => 'biometric',
                     'currentVersion' => $device->firmware_version ?? 'inconnue',
-                    'targetVersion' => null,
-                    'updateStatus' => $lastLog?->status ?? 'skipped',
-                    'lastCheckedAt' => $device->last_sync_at?->toISOString() ?? now()->toISOString(),
-                    'lastUpdatedAt' => $lastLog?->completed_at?->toISOString(),
+                    'targetVersion'  => $latestBio?->version,
+                    'updateStatus'   => $lastLog?->status ?? 'skipped',
+                    'lastCheckedAt'  => $device->last_sync_at?->toISOString() ?? now()->toISOString(),
+                    'lastUpdatedAt'  => $lastLog?->completed_at?->toISOString(),
                 ];
             }
         }
@@ -165,6 +175,10 @@ class FirmwareController extends BaseApiController
             ? RfidDevice::findOrFail($deviceId)
             : BiometricDevice::findOrFail($deviceId);
 
+        if (empty($device->serial_number)) {
+            return $this->errorResponse('Ce terminal n\'a pas de numero de serie. Impossible d\'envoyer la commande OTA.', 422);
+        }
+
         $log = OtaUpdateLog::create([
             'device_id' => $deviceId,
             'device_kind' => $deviceKind,
@@ -185,7 +199,7 @@ class FirmwareController extends BaseApiController
                 'type' => 'ota_update',
                 'version' => $firmwareVersion->version,
                 'firmware_url' => $fileUrl,
-                'log_id' => $log->id,
+                'log_id' => (string) $log->id,
                 'timestamp' => now()->toISOString(),
             ]));
 
@@ -268,8 +282,7 @@ class FirmwareController extends BaseApiController
         ]);
 
         $firmware = FirmwareVersion::findOrFail($request->input('firmware_version_id'));
-        $user = Auth::user();
-        $companyId = $user->company_id;
+        $companyId = $this->resolveActiveCompanyId();
 
         $deviceModel = $firmware->device_kind === 'rfid' ? RfidDevice::class : BiometricDevice::class;
         $query = $deviceModel::query();
@@ -326,8 +339,7 @@ class FirmwareController extends BaseApiController
         ]);
 
         $firmware = FirmwareVersion::findOrFail($request->input('firmware_version_id'));
-        $user = Auth::user();
-        $companyId = $user->company_id;
+        $companyId = $this->resolveActiveCompanyId();
 
         $deviceModel = $firmware->device_kind === 'rfid' ? RfidDevice::class : BiometricDevice::class;
         $query = $deviceModel::query();
@@ -384,8 +396,7 @@ class FirmwareController extends BaseApiController
         ]);
 
         $firmware = FirmwareVersion::findOrFail($request->input('firmware_version_id'));
-        $user = Auth::user();
-        $companyId = $user->company_id;
+        $companyId = $this->resolveActiveCompanyId();
 
         $deviceModel = $firmware->device_kind === 'rfid' ? RfidDevice::class : BiometricDevice::class;
         $deviceIds = $deviceModel::query()
@@ -438,20 +449,45 @@ class FirmwareController extends BaseApiController
 
     private function scheduleAutoUpdates(FirmwareVersion $firmwareVersion): void
     {
-        // Enqueue auto-update logs for all devices of the right kind
-        // In production, this would dispatch a Job. Here we create pending logs.
+        $mqtt = app(MqttService::class);
         $model = $firmwareVersion->device_kind === 'rfid' ? RfidDevice::class : BiometricDevice::class;
-        $devices = $model::all();
+
+        // Scope par company de l'utilisateur connecté (multi-tenant)
+        $companyId = $this->resolveActiveCompanyId();
+        $query = $model::query();
+        if ($companyId) {
+            $query->where('company_id', $companyId);
+        }
+        // Ignorer les terminaux sans serial_number (impossible d'envoyer le MQTT)
+        $query->whereNotNull('serial_number')->where('serial_number', '!=', '');
+        $devices = $query->get();
+
+        $fileUrl = $firmwareVersion->file_path
+            ? Storage::disk('public')->url($firmwareVersion->file_path)
+            : null;
 
         foreach ($devices as $device) {
-            OtaUpdateLog::create([
-                'device_id' => $device->id,
-                'device_kind' => $firmwareVersion->device_kind,
+            $log = OtaUpdateLog::create([
+                'device_id'           => $device->id,
+                'device_kind'         => $firmwareVersion->device_kind,
                 'firmware_version_id' => $firmwareVersion->id,
-                'status' => 'pending',
-                'triggered_by' => 'auto',
-                'started_at' => now(),
+                'status'              => 'pending',
+                'triggered_by'        => 'auto',
+                'started_at'          => now(),
             ]);
+
+            try {
+                $mqtt->publish("devices/{$device->serial_number}/ota", json_encode([
+                    'type'         => 'ota_update',
+                    'version'      => $firmwareVersion->version,
+                    'firmware_url' => $fileUrl,
+                    'log_id'       => (string) $log->id,
+                    'timestamp'    => now()->toISOString(),
+                ]));
+                $log->update(['status' => 'in_progress']);
+            } catch (\Exception $e) {
+                $log->update(['status' => 'failed', 'error_message' => $e->getMessage(), 'completed_at' => now()]);
+            }
         }
     }
 }

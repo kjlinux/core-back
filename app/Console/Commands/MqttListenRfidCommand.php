@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Events\AttendanceRecorded;
 use App\Events\DeviceStatusUpdated;
 use App\Models\AttendanceRecord;
+use App\Models\OtaUpdateLog;
 use App\Models\RfidCard;
 use App\Models\RfidDevice;
 use App\Models\Schedule;
@@ -86,6 +87,11 @@ class MqttListenRfidCommand extends Command
             $this->processMessage($topic, $message);
         }, MqttClient::QOS_AT_LEAST_ONCE);
 
+        // Ecoute les réponses OTA des terminaux RFID
+        $this->mqtt->subscribe('devices/+/ota/response', function (string $topic, string $message) {
+            $this->processOtaResponse($topic, $message, 'rfid');
+        }, MqttClient::QOS_AT_LEAST_ONCE);
+
         $this->mqtt->loop(true);
     }
 
@@ -130,7 +136,12 @@ class MqttListenRfidCommand extends Command
 
         $device = RfidDevice::where('serial_number', $uniqueId)->first();
         if ($device) {
-            $device->update(['is_online' => true, 'last_ping_at' => now()]);
+            $updateData = ['is_online' => true, 'last_ping_at' => now()];
+            // Synchroniser la version firmware si le terminal la reporte
+            if (!empty($data['firmware_version'])) {
+                $updateData['firmware_version'] = $data['firmware_version'];
+            }
+            $device->update($updateData);
             event(new DeviceStatusUpdated('rfid', (string) $device->id, 'online', $data));
         }
 
@@ -242,5 +253,44 @@ class MqttListenRfidCommand extends Command
         }
 
         $this->mqtt->publish($responseTopic, config('mqtt.response_codes.accepted'), MqttClient::QOS_AT_LEAST_ONCE);
+    }
+
+    private function processOtaResponse(string $topic, string $message, string $deviceKind): void
+    {
+        $this->info("Reponse OTA recue sur {$topic}: {$message}");
+
+        $data = json_decode($message, true);
+        if (!$data) {
+            $this->warn('Reponse OTA invalide: JSON malformé');
+            return;
+        }
+
+        $logId      = $data['log_id'] ?? null;
+        $success    = $data['success'] ?? false;
+        $version    = $data['version'] ?? null;
+        $errorMsg   = $data['error'] ?? null;
+        $serial     = explode('/', $topic)[1] ?? null;
+
+        // Mettre à jour le log OTA
+        if ($logId) {
+            $log = OtaUpdateLog::find($logId);
+            if ($log) {
+                $log->update([
+                    'status'        => $success ? 'success' : 'failed',
+                    'completed_at'  => now(),
+                    'error_message' => $success ? null : ($errorMsg ?? 'Echec signale par le terminal'),
+                ]);
+                $this->info("OtaUpdateLog {$logId} mis a jour : " . ($success ? 'success' : 'failed'));
+            } else {
+                $this->warn("OtaUpdateLog introuvable: {$logId}");
+            }
+        }
+
+        // Mettre à jour la version firmware du terminal
+        if ($success && $version && $serial) {
+            RfidDevice::where('serial_number', $serial)
+                ->update(['firmware_version' => $version]);
+            $this->info("Firmware RFID {$serial} mis a jour vers {$version}");
+        }
     }
 }

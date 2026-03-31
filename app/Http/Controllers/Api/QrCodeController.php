@@ -101,15 +101,19 @@ class QrCodeController extends BaseApiController
             fn($q) => $q->where('company_id', $user->company_id)
         )->whereNotNull('device_fingerprint')->count();
 
-        $scansToday = $attendanceQuery->whereDate('scanned_at', today())->count();
+        $scansToday = (clone $attendanceQuery)->whereDate('date', today())->count();
 
+        $presentToday = (clone $attendanceQuery)->whereDate('date', today())->distinct('employee_id')->count();
         $attendanceRate = $totalEmployees > 0
-            ? round(($attendanceQuery->clone()->whereDate('date', today())->distinct('employee_id')->count() / $totalEmployees) * 100)
+            ? round(($presentToday / $totalEmployees) * 100)
             : 0;
 
+        $activeQrCodes = (clone $qrQuery)->where('is_active', true)->count();
+        $totalQrCodes = (clone $qrQuery)->count();
+
         return $this->successResponse([
-            'totalQrCodes' => $qrQuery->where('is_active', true)->count(),
-            'activeQrCodes' => $qrQuery->clone()->where('is_active', true)->count(),
+            'totalQrCodes' => $totalQrCodes,
+            'activeQrCodes' => $activeQrCodes,
             'enrolledDevices' => $enrolledDevices,
             'totalEmployees' => $totalEmployees,
             'scansToday' => $scansToday,

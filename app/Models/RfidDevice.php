@@ -18,6 +18,7 @@ class RfidDevice extends Model
         'site_id',
         'is_online',
         'last_ping_at',
+        'firmware_version',
         'mqtt_topic',
     ];
 

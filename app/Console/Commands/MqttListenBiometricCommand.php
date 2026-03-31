@@ -9,6 +9,7 @@ use App\Models\BiometricAuditLog;
 use App\Models\BiometricDevice;
 use App\Models\Employee;
 use App\Models\FingerprintEnrollment;
+use App\Models\OtaUpdateLog;
 use App\Models\Schedule;
 use Illuminate\Console\Command;
 use PhpMqtt\Client\ConnectionSettings;
@@ -87,6 +88,11 @@ class MqttListenBiometricCommand extends Command
             $this->processMessage($topic, $message);
         }, MqttClient::QOS_AT_LEAST_ONCE);
 
+        // Ecoute les réponses OTA des terminaux biométriques
+        $this->mqtt->subscribe('devices/+/ota/response', function (string $topic, string $message) {
+            $this->processOtaResponse($topic, $message);
+        }, MqttClient::QOS_AT_LEAST_ONCE);
+
         $this->mqtt->loop(true);
     }
 
@@ -117,6 +123,12 @@ class MqttListenBiometricCommand extends Command
         if (isset($data['action']) && $data['action'] === 'status') {
             $this->info("Status update du capteur {$serialNumber}");
             if ($device) {
+                $updateData = ['is_online' => true, 'last_sync_at' => now()];
+                // Synchroniser la version firmware si le terminal la reporte
+                if (!empty($data['firmware_version'])) {
+                    $updateData['firmware_version'] = $data['firmware_version'];
+                }
+                $device->update($updateData);
                 event(new DeviceStatusUpdated('biometric', (string) $device->id, 'online', $data));
             }
             return;
@@ -288,6 +300,45 @@ class MqttListenBiometricCommand extends Command
 
             $this->mqtt->publish($responseTopic, config('mqtt.response_codes.rejected'), MqttClient::QOS_AT_LEAST_ONCE);
             $this->warn("Enrolement echoue pour enrollment {$enrollmentId}");
+        }
+    }
+
+    private function processOtaResponse(string $topic, string $message): void
+    {
+        $this->info("Reponse OTA recue sur {$topic}: {$message}");
+
+        $data = json_decode($message, true);
+        if (!$data) {
+            $this->warn('Reponse OTA invalide: JSON malformé');
+            return;
+        }
+
+        $logId    = $data['log_id'] ?? null;
+        $success  = $data['success'] ?? false;
+        $version  = $data['version'] ?? null;
+        $errorMsg = $data['error'] ?? null;
+        $serial   = explode('/', $topic)[1] ?? null;
+
+        // Mettre à jour le log OTA
+        if ($logId) {
+            $log = OtaUpdateLog::find($logId);
+            if ($log) {
+                $log->update([
+                    'status'        => $success ? 'success' : 'failed',
+                    'completed_at'  => now(),
+                    'error_message' => $success ? null : ($errorMsg ?? 'Echec signale par le terminal'),
+                ]);
+                $this->info("OtaUpdateLog {$logId} mis a jour : " . ($success ? 'success' : 'failed'));
+            } else {
+                $this->warn("OtaUpdateLog introuvable: {$logId}");
+            }
+        }
+
+        // Mettre à jour la version firmware du terminal biométrique
+        if ($success && $version && $serial) {
+            BiometricDevice::where('serial_number', $serial)
+                ->update(['firmware_version' => $version]);
+            $this->info("Firmware biometrique {$serial} mis a jour vers {$version}");
         }
     }
 }
