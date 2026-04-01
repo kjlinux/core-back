@@ -19,6 +19,7 @@ class UpdateRfidDeviceRequest extends FormRequest
             'name' => ['sometimes', 'string', 'max:255'],
             'company_id' => ['sometimes', 'exists:companies,id'],
             'site_id' => ['sometimes', 'exists:sites,id'],
+            'is_online' => ['sometimes', 'boolean'],
         ];
     }
 }
