@@ -25,10 +25,10 @@ class CompanyController extends BaseApiController
             // super_admin voit toutes les entreprises
         } elseif ($user->isTechnicien()) {
             // technicien voit toutes les entreprises (il intervient chez n'importe quel client)
-            // Si un X-Active-Company-Id est précisé, on filtre uniquement sur celle-là
-            $headerCompanyId = request()->header('X-Active-Company-Id');
-            if ($headerCompanyId) {
-                $query->where('id', $headerCompanyId);
+            // Si __skipCompanyScope n'est pas passé et qu'un _company_id est fourni, on filtre sur celle-là
+            $activeCompanyId = request()->input('_company_id');
+            if ($activeCompanyId) {
+                $query->where('id', $activeCompanyId);
             }
         } else {
             // admin_enterprise et manager voient uniquement leur entreprise

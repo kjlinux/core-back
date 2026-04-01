@@ -70,19 +70,30 @@ class BaseApiController extends Controller
      * - technicien  : utilise X-Active-Company-Id s'il l'a sélectionné, sinon son company_id
      * - autres rôles : company_id fixe de l'utilisateur
      */
+    public function resolveActiveCompanyIdPublic(): ?string { return $this->resolveActiveCompanyId(); }
+
     protected function resolveActiveCompanyId(): ?string
     {
         $user = auth()->user();
         if (!$user) return null;
 
-        $headerCompanyId = request()->header('X-Active-Company-Id');
+        // Company id passed as query param ?_company_id (header was blocked by CORS on some proxies)
+        $activeCompanyId = request()->input('_company_id');
+
+        \Log::info('[resolveActiveCompanyId]', [
+            'user_id'          => $user->id,
+            'role'             => $user->role,
+            'user_company_id'  => $user->company_id,
+            '_company_id_param'=> $activeCompanyId,
+            'all_params'       => request()->query(),
+        ]);
 
         if ($user->isSuperAdmin()) {
-            return $headerCompanyId ?: null;
+            return $activeCompanyId ?: null;
         }
 
         if ($user->isTechnicien()) {
-            $resolved = $headerCompanyId ?: $user->company_id;
+            $resolved = $activeCompanyId ?: $user->company_id;
             if (!$resolved) {
                 abort(403, 'Technicien: aucune entreprise active selectionnee.');
             }
