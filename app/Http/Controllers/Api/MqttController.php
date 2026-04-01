@@ -32,7 +32,7 @@ class MqttController extends BaseApiController
     {
         $data = $request->validated();
 
-        $deviceId = $data['device_id'];
+        $deviceId   = $data['device_id'];
         $deviceType = $data['device_type'];
 
         if ($deviceType === 'biometric') {
@@ -43,21 +43,20 @@ class MqttController extends BaseApiController
 
         $commandCode = config("mqtt.command_codes.{$deviceType}.{$data['command']}", $data['command']);
 
-        $responseTopic = $mqtt->getResponseTopic($device->mqtt_topic);
-
-        $payload = json_encode([
-            'command' => $commandCode,
-            'device_id' => $device->id,
-            'device_type' => $deviceType,
-            'timestamp' => now()->toISOString(),
-            'params' => $data['params'] ?? null,
-        ]);
+        // Reconstruire le topic /response depuis serial_number si mqtt_topic absent
+        if (!empty($device->mqtt_topic)) {
+            $responseTopic = $mqtt->getResponseTopic($device->mqtt_topic);
+        } else {
+            $prefix = config("mqtt.topics.{$deviceType}");
+            $responseTopic = "{$prefix}/{$device->serial_number}/response";
+        }
 
         try {
-            $mqtt->publish($responseTopic, $payload);
+            // Publier le code de commande brut — le firmware compare message == CMD_SCAN etc.
+            $mqtt->publish($responseTopic, $commandCode);
 
             return $this->successResponse([
-                'topic' => $responseTopic,
+                'topic'   => $responseTopic,
                 'command' => $commandCode,
             ], 'Commande envoyee avec succes');
         } catch (\Exception $e) {

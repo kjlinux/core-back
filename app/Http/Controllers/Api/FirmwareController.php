@@ -21,6 +21,34 @@ use Illuminate\Support\Facades\Storage;
 
 class FirmwareController extends BaseApiController
 {
+    /**
+     * Endpoint public pour les capteurs ESP32 — vérification automatique OTA.
+     * GET /firmware/version.json?device_kind=rfid
+     * Reponse : {"version":"V2.0.4","url":"https://..."}
+     */
+    public function latestVersion(Request $request): JsonResponse
+    {
+        $deviceKind = $request->input('device_kind', 'rfid');
+
+        $latest = FirmwareVersion::where('device_kind', $deviceKind)
+            ->where('is_published', true)
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (!$latest) {
+            return response()->json(['version' => null, 'url' => null]);
+        }
+
+        $fileUrl = $latest->file_path
+            ? rtrim(config('app.url'), '/') . '/storage/' . $latest->file_path
+            : null;
+
+        return response()->json([
+            'version' => $latest->version,
+            'url'     => $fileUrl,
+        ]);
+    }
+
     public function versions(Request $request): JsonResponse
     {
         $query = FirmwareVersion::with('uploader')
@@ -190,7 +218,7 @@ class FirmwareController extends BaseApiController
 
         // Publish OTA command via MQTT
         $fileUrl = $firmwareVersion->file_path
-            ? Storage::disk('public')->url($firmwareVersion->file_path)
+            ? rtrim(config('app.url'), '/') . '/storage/' . $firmwareVersion->file_path
             : null;
 
         try {
@@ -292,7 +320,7 @@ class FirmwareController extends BaseApiController
         $devices = $query->get();
 
         $fileUrl = $firmware->file_path
-            ? Storage::disk('public')->url($firmware->file_path)
+            ? rtrim(config('app.url'), '/') . '/storage/' . $firmware->file_path
             : null;
 
         $logs = [];
@@ -409,7 +437,7 @@ class FirmwareController extends BaseApiController
             ->get();
 
         $fileUrl = $firmware->file_path
-            ? Storage::disk('public')->url($firmware->file_path)
+            ? rtrim(config('app.url'), '/') . '/storage/' . $firmware->file_path
             : null;
 
         $triggered = 0;
@@ -463,7 +491,7 @@ class FirmwareController extends BaseApiController
         $devices = $query->get();
 
         $fileUrl = $firmwareVersion->file_path
-            ? Storage::disk('public')->url($firmwareVersion->file_path)
+            ? rtrim(config('app.url'), '/') . '/storage/' . $firmwareVersion->file_path
             : null;
 
         foreach ($devices as $device) {

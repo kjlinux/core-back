@@ -42,6 +42,9 @@ use App\Http\Controllers\Api\SiteController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
+// Firmware version check — appelee par les capteurs ESP32 (sans auth)
+Route::get('/firmware/version.json', [FirmwareController::class, 'latestVersion']);
+
 // Public routes (sans auth)
 Route::prefix('public')->group(function () {
     Route::get('/review/{token}', [PublicReviewController::class, 'show']);
