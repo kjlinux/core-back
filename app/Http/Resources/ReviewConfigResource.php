@@ -28,7 +28,7 @@ class ReviewConfigResource extends JsonResource
                     'name' => $c->name,
                 ])
             ),
-            'reviewUrl' => rtrim(explode(',', env('FRONTEND_URL', config('app.url')))[0], '/') . '/avis/' . $this->token,
+            'reviewUrl' => rtrim(config('app.frontend_url'), '/') . '/avis/' . $this->token,
         ];
     }
 }
