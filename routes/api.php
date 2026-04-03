@@ -57,6 +57,11 @@ Route::post('/auth/forgot-password', ForgotPasswordController::class);
 Route::post('/auth/reset-password', ResetPasswordController::class);
 Route::post('/payment/callback', [PaymentCallbackController::class, 'handle']);
 
+// Routes publiques QR — utilisées par les employés sans compte (téléphone mobile)
+Route::post('/qr-attendance/scan', [QrAttendanceController::class, 'scan']);
+Route::post('/employees/device/identify', [EmployeeDeviceController::class, 'identify']);
+Route::post('/enroll-session/{token}/submit', [EnrollSessionController::class, 'submit']);
+
 // Broadcasting auth (Reverb/Pusher private channels via Bearer token)
 Route::post('/broadcasting/auth', function (\Illuminate\Http\Request $request) {
     return \Illuminate\Support\Facades\Broadcast::auth($request);
@@ -286,15 +291,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/qr-codes/stats', [QrCodeController::class, 'stats']);
     Route::get('/qr-codes/{id}', [QrCodeController::class, 'show']);
 
-    // Scan QR (public — depuis le téléphone de l'employé, sans auth requise)
+    // Pointage QR — lecture (admin)
     Route::get('/qr-attendance', [QrAttendanceController::class, 'index']);
-    Route::post('/qr-attendance/scan', [QrAttendanceController::class, 'scan']);
-
-    // Identifier si un appareil est enrôlé (utilisé par la page de scan mobile)
-    Route::post('/employees/device/identify', [EmployeeDeviceController::class, 'identify']);
-
-    // Sessions d'enrôlement QR (soumission depuis le téléphone — sans auth)
-    Route::post('/enroll-session/{token}/submit', [EnrollSessionController::class, 'submit']);
 
     // =============================================
     // Firmware OTA
