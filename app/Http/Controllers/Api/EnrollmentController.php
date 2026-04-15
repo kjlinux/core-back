@@ -8,6 +8,7 @@ use App\Models\BiometricAuditLog;
 use App\Models\BiometricDevice;
 use App\Models\Employee;
 use App\Models\FingerprintEnrollment;
+use App\Models\TechnicienActivityLog;
 use App\Services\MqttService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -65,6 +66,8 @@ class EnrollmentController extends BaseApiController
             'target' => $employee ? $employee->full_name : $enrollment->employee_id,
             'details' => 'Enrolement biometrique cree pour employe: ' . ($employee ? $employee->full_name : $enrollment->employee_id),
         ]);
+
+        TechnicienActivityLog::record('enroll', 'biometric_enrollment', (string) $enrollment->id, $employee ? $employee->first_name . ' ' . $employee->last_name : null);
 
         return $this->resourceResponse(new FingerprintEnrollmentResource($enrollment), '', 201);
     }

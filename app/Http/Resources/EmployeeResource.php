@@ -37,6 +37,8 @@ class EmployeeResource extends JsonResource
             'deviceInfo' => $this->device_info,
             'deviceEnrolledAt' => $this->device_enrolled_at?->toISOString(),
             'createdAt' => $this->created_at?->toISOString(),
+            'paymentMode' => $this->payment_mode,
+            'baseSalary' => $this->base_salary,
         ];
     }
 }

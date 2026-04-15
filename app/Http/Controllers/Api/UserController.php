@@ -26,14 +26,33 @@ class UserController extends BaseApiController
         $authUser = $request->user();
         $query = User::with('company');
 
-        // admin_enterprise can only see users from their company
+        // admin_enterprise : uniquement les utilisateurs de sa propre entreprise
         if ($authUser->isAdminEnterprise()) {
             $query->where('company_id', $authUser->company_id);
         }
 
-        $query->when($request->input('company_id'), function ($q, $companyId) {
-            $q->where('company_id', $companyId);
-        });
+        // technicien : voit les users de l'entreprise active + les autres techniciens (sans company)
+        // mais jamais les super_admin
+        if ($authUser->isTechnicien()) {
+            $activeCompanyId = $this->resolveActiveCompanyId();
+            $query->where('role', '!=', 'super_admin')
+                  ->where(function ($q) use ($activeCompanyId) {
+                      // Users directement liés à l'entreprise active
+                      $q->where('company_id', $activeCompanyId)
+                        // OU techniciens sans entreprise fixe
+                        ->orWhere(function ($q2) {
+                            $q2->where('role', 'technicien')
+                               ->whereNull('company_id');
+                        });
+                  });
+        }
+
+        // Filtre company_id additionnel (super_admin uniquement)
+        if ($authUser->isSuperAdmin()) {
+            $query->when($request->input('company_id'), function ($q, $companyId) {
+                $q->where('company_id', $companyId);
+            });
+        }
 
         $query->when($request->input('role'), function ($q, $role) {
             $q->where('role', $role);
@@ -82,12 +101,14 @@ class UserController extends BaseApiController
         $authUser = $request->user();
         $data = $request->validated();
 
-        // admin_enterprise and technicien can only create managers in their own company
+        // admin_enterprise and technicien can only create managers in their active company
         if ($authUser->isAdminEnterprise() || $authUser->isTechnicien()) {
             if ($data['role'] !== 'manager') {
                 return $this->errorResponse('Vous ne pouvez creer que des managers', 403);
             }
-            $data['company_id'] = $authUser->company_id;
+            $data['company_id'] = $authUser->isTechnicien()
+                ? $this->resolveActiveCompanyId()
+                : $authUser->company_id;
         }
 
         $plainPassword = $data['password'];
@@ -116,8 +137,11 @@ class UserController extends BaseApiController
         $data = $request->validated();
 
         if ($authUser->isAdminEnterprise() || $authUser->isTechnicien()) {
+            $scopedCompanyId = $authUser->isTechnicien()
+                ? $this->resolveActiveCompanyId()
+                : $authUser->company_id;
             // Cannot edit users outside their company
-            if ($user->company_id !== $authUser->company_id) {
+            if ($user->company_id !== $scopedCompanyId) {
                 return $this->errorResponse('Acces non autorise', 403);
             }
             // Cannot edit non-manager users (e.g. another admin_enterprise)
@@ -128,8 +152,7 @@ class UserController extends BaseApiController
             if (isset($data['role']) && $data['role'] !== 'manager') {
                 return $this->errorResponse('Vous ne pouvez pas changer le role', 403);
             }
-            // Force company_id to their own
-            $data['company_id'] = $authUser->company_id;
+            $data['company_id'] = $scopedCompanyId;
         }
 
         if (isset($data['first_name']) || isset($data['last_name'])) {
@@ -153,7 +176,10 @@ class UserController extends BaseApiController
         $user = User::findOrFail($id);
 
         if ($authUser->isAdminEnterprise() || $authUser->isTechnicien()) {
-            if ($user->company_id !== $authUser->company_id || $user->role !== 'manager') {
+            $scopedCompanyId = $authUser->isTechnicien()
+                ? $this->resolveActiveCompanyId()
+                : $authUser->company_id;
+            if ($user->company_id !== $scopedCompanyId || $user->role !== 'manager') {
                 return $this->errorResponse('Acces non autorise', 403);
             }
         }
@@ -178,7 +204,10 @@ class UserController extends BaseApiController
         $user = User::findOrFail($id);
 
         if ($authUser->isAdminEnterprise() || $authUser->isTechnicien()) {
-            if ($user->company_id !== $authUser->company_id || $user->role !== 'manager') {
+            $scopedCompanyId = $authUser->isTechnicien()
+                ? $this->resolveActiveCompanyId()
+                : $authUser->company_id;
+            if ($user->company_id !== $scopedCompanyId || $user->role !== 'manager') {
                 return $this->errorResponse('Acces non autorise', 403);
             }
         }

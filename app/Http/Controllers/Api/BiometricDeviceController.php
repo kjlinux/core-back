@@ -6,6 +6,7 @@ use App\Http\Requests\Biometric\StoreDeviceRequest;
 use App\Http\Resources\BiometricDeviceResource;
 use App\Models\BiometricAuditLog;
 use App\Models\BiometricDevice;
+use App\Models\TechnicienActivityLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -56,6 +57,8 @@ class BiometricDeviceController extends BaseApiController
             'details' => 'Appareil biometrique cree: ' . $device->name,
         ]);
 
+        TechnicienActivityLog::record('create', 'biometric_device', (string) $device->id, $device->name . ' (' . $device->serial_number . ')');
+
         return $this->resourceResponse(new BiometricDeviceResource($device), '', 201);
     }
 
@@ -70,6 +73,8 @@ class BiometricDeviceController extends BaseApiController
             'target' => $device->serial_number,
             'details' => 'Appareil biometrique supprime: ' . $device->name,
         ]);
+
+        TechnicienActivityLog::record('delete', 'biometric_device', (string) $device->id, $device->name . ' (' . $device->serial_number . ')');
 
         $device->delete();
 

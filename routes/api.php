@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\Api\PayrollController;
 use App\Http\Controllers\Api\AdminOrderController;
+use App\Http\Controllers\Api\TechnicienActivityController;
 use App\Http\Controllers\Api\QrCodeController;
 use App\Http\Controllers\Api\QrAttendanceController;
 use App\Http\Controllers\Api\EmployeeDeviceController;
@@ -328,8 +330,43 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/trends', [DashboardController::class, 'trends']);
     Route::get('/dashboard/charts', [DashboardController::class, 'charts']);
 
+    // =============================================
+    // Activites techniciens
+    // =============================================
+    // Lecture : super_admin voit tout, technicien voit ses propres actions
+    Route::middleware('role:super_admin,technicien')->group(function () {
+        Route::get('/technicien/activities', [TechnicienActivityController::class, 'index']);
+    });
+    // Super admin uniquement : syntheses
+    Route::middleware('role:super_admin')->group(function () {
+        Route::get('/technicien/activities/summary-by-company', [TechnicienActivityController::class, 'summaryByCompany']);
+        Route::get('/technicien/{technicienId}/companies', [TechnicienActivityController::class, 'companiesByTechnicien']);
+    });
+
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::patch('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+
+    // =============================================
+    // Paie (super_admin + admin_enterprise)
+    // =============================================
+    Route::middleware('role:super_admin,admin_enterprise')->group(function () {
+        // Configuration
+        Route::get('/payroll/config/{companyId}',                     [PayrollController::class, 'getConfig']);
+        Route::put('/payroll/config/{companyId}',                     [PayrollController::class, 'saveConfig']);
+        Route::put('/payroll/config/{companyId}/lateness-rules',      [PayrollController::class, 'saveLatenessRules']);
+
+        // Generation
+        Route::post('/payroll/generate',                              [PayrollController::class, 'generate']);
+
+        // Fiches — liste + detail + validation + export
+        Route::get('/payroll/payslips',                               [PayrollController::class, 'index']);
+        Route::get('/payroll/payslips/{id}',                          [PayrollController::class, 'show']);
+        Route::patch('/payroll/payslips/{id}/validate',               [PayrollController::class, 'validate']);
+        // PDF genere cote frontend (jsPDF) — pas d'endpoint necessaire
+    });
+
+    // Portail employe — acces a ses propres fiches (tous roles)
+    Route::get('/payroll/employees/{employeeId}/payslips',            [PayrollController::class, 'myPayslips']);
 });

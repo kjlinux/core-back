@@ -22,6 +22,7 @@ class User extends Authenticatable
         'password',
         'role',
         'company_id',
+        'employee_id',
         'avatar',
         'is_active',
     ];
@@ -45,9 +46,19 @@ class User extends Authenticatable
         return $this->belongsTo(Company::class);
     }
 
+    public function employee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class);
+    }
+
     public function notifications(): HasMany
     {
         return $this->hasMany(AppNotification::class);
+    }
+
+    public function activityLogs(): HasMany
+    {
+        return $this->hasMany(TechnicienActivityLog::class, 'technicien_id');
     }
 
     public function isSuperAdmin(): bool
@@ -73,6 +84,11 @@ class User extends Authenticatable
     public function isSetupRole(): bool
     {
         return in_array($this->role, ['super_admin', 'technicien']);
+    }
+
+    public function isEmploye(): bool
+    {
+        return $this->role === 'employe';
     }
 
     public function isAdminOrAbove(): bool

@@ -6,6 +6,7 @@ use App\Http\Requests\Rfid\StoreRfidDeviceRequest;
 use App\Http\Requests\Rfid\UpdateRfidDeviceRequest;
 use App\Http\Resources\RfidDeviceResource;
 use App\Models\RfidDevice;
+use App\Models\TechnicienActivityLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -44,6 +45,8 @@ class RfidDeviceController extends BaseApiController
 
         $device = RfidDevice::create($data);
 
+        TechnicienActivityLog::record('create', 'rfid_device', (string) $device->id, $device->name . ' (' . $device->serial_number . ')');
+
         return $this->resourceResponse(new RfidDeviceResource($device), '', 201);
     }
 
@@ -52,12 +55,15 @@ class RfidDeviceController extends BaseApiController
         $device = RfidDevice::findOrFail($id);
         $device->update($request->validated());
 
+        TechnicienActivityLog::record('update', 'rfid_device', (string) $device->id, $device->name . ' (' . $device->serial_number . ')');
+
         return $this->resourceResponse(new RfidDeviceResource($device));
     }
 
     public function destroy(string $id): JsonResponse
     {
         $device = RfidDevice::findOrFail($id);
+        TechnicienActivityLog::record('delete', 'rfid_device', (string) $device->id, $device->name . ' (' . $device->serial_number . ')');
         $device->delete();
 
         return $this->noContentResponse();

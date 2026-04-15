@@ -26,6 +26,7 @@ class UserResource extends JsonResource
                 $this->relationLoaded('company'),
                 fn () => $this->company?->name
             ),
+            'employeeId' => $this->employee_id ? (string) $this->employee_id : null,
             'avatar' => $this->avatar,
             'isActive' => (bool) $this->is_active,
             'createdAt' => $this->created_at?->toISOString(),

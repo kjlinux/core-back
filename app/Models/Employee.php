@@ -31,6 +31,8 @@ class Employee extends Model
         'device_fingerprint',
         'device_info',
         'device_enrolled_at',
+        'payment_mode',
+        'base_salary',
     ];
 
     protected $casts = [
@@ -38,6 +40,7 @@ class Employee extends Model
         'biometric_enrolled' => 'boolean',
         'hire_date' => 'date',
         'device_enrolled_at' => 'datetime',
+        'base_salary' => 'integer',
     ];
 
     public function site(): BelongsTo

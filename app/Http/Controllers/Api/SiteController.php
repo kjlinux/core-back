@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Site;
+use App\Models\TechnicienActivityLog;
 use App\Http\Resources\SiteResource;
 use App\Http\Resources\DepartmentResource;
 use App\Http\Requests\Site\StoreSiteRequest;
@@ -45,6 +46,8 @@ class SiteController extends BaseApiController
         $data = $this->enforceCompanyId($request->validated());
         $site = Site::create($data);
 
+        TechnicienActivityLog::record('create', 'site', (string) $site->id, $site->name);
+
         return $this->resourceResponse(new SiteResource($site), 'Site cree avec succes', 201);
     }
 
@@ -56,6 +59,8 @@ class SiteController extends BaseApiController
         $site = Site::findOrFail($id);
         $site->update($request->validated());
 
+        TechnicienActivityLog::record('update', 'site', (string) $site->id, $site->name);
+
         return $this->resourceResponse(new SiteResource($site), 'Site mis a jour avec succes');
     }
 
@@ -65,6 +70,7 @@ class SiteController extends BaseApiController
     public function destroy(string $id): JsonResponse
     {
         $site = Site::findOrFail($id);
+        TechnicienActivityLog::record('delete', 'site', (string) $site->id, $site->name);
         $site->delete();
 
         return $this->noContentResponse();

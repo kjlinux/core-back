@@ -25,6 +25,8 @@ class StoreEmployeeRequest extends FormRequest
             'employee_number' => ['required', 'string', 'unique:employees'],
             'hire_date' => ['required', 'date'],
             'avatar' => ['nullable', 'string'],
+            'payment_mode' => ['nullable', 'string', 'in:monthly,hourly,daily,weekly,forfait'],
+            'base_salary' => ['nullable', 'integer', 'min:0'],
         ];
     }
 }

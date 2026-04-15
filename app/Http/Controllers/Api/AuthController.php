@@ -62,7 +62,7 @@ class AuthController extends BaseApiController
 
     public function me(Request $request): JsonResponse
     {
-        return $this->resourceResponse(new UserResource($request->user()->load('company')));
+        return $this->resourceResponse(new UserResource($request->user()->load('company', 'employee')));
     }
 
     /**

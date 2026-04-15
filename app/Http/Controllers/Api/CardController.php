@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\RfidCard;
 use App\Models\CardHistory;
+use App\Models\TechnicienActivityLog;
 use App\Http\Resources\RfidCardResource;
 use App\Http\Resources\CardHistoryResource;
 use App\Http\Requests\Card\StoreCardRequest;
@@ -53,6 +54,8 @@ class CardController extends BaseApiController
 
         $card = RfidCard::create($data);
 
+        TechnicienActivityLog::record('create', 'card', (string) $card->id, $card->uid);
+
         return $this->resourceResponse(new RfidCardResource($card), 'Carte RFID creee avec succes', 201);
     }
 
@@ -77,6 +80,8 @@ class CardController extends BaseApiController
         ]);
 
         $card->load('employee');
+
+        TechnicienActivityLog::record('assign', 'card', (string) $card->id, $card->uid);
 
         return $this->resourceResponse(new RfidCardResource($card), 'Carte assignee avec succes');
     }
