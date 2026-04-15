@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('technicien_activity_logs', function (Blueprint $table) {
             $table->uuid('id')->primary()->default(\Illuminate\Support\Facades\DB::raw('gen_random_uuid()'));
-            $table->foreignUuid('technicien_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('technicien_id')->constrained('users')->cascadeOnDelete();
             $table->foreignUuid('company_id')->constrained('companies')->cascadeOnDelete();
             $table->string('action');        // ex: 'create', 'update', 'delete', 'assign', 'sync'
             $table->string('resource_type'); // ex: 'site', 'employee', 'card', 'rfid_device'
