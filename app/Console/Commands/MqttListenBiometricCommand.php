@@ -18,6 +18,7 @@ use PhpMqtt\Client\MqttClient;
 class MqttListenBiometricCommand extends Command
 {
     protected $signature = 'mqtt:listen-biometric';
+
     protected $description = 'Ecoute les capteurs biometriques et traite les empreintes';
 
     private ?MqttClient $mqtt = null;
@@ -51,7 +52,7 @@ class MqttListenBiometricCommand extends Command
     {
         $host = config('mqtt.host');
         $port = (int) config('mqtt.port', 8883);
-        $clientId = config('mqtt.client_id', 'core-api') . '-biometric-' . uniqid();
+        $clientId = config('mqtt.client_id', 'core-api').'-biometric-'.uniqid();
 
         $this->mqtt = new MqttClient($host, $port, $clientId, MqttClient::MQTT_3_1_1);
 
@@ -81,7 +82,7 @@ class MqttListenBiometricCommand extends Command
         $this->mqtt->connect($connectionSettings, true);
         $this->info('Connecte au broker MQTT.');
 
-        $topic = config('mqtt.topics.biometric') . '/+/event';
+        $topic = config('mqtt.topics.biometric').'/+/event';
         $this->info("Abonnement au topic: {$topic}");
 
         $this->mqtt->subscribe($topic, function (string $topic, string $message) {
@@ -101,8 +102,9 @@ class MqttListenBiometricCommand extends Command
         $this->info("Message recu sur {$topic}: {$message}");
 
         $data = json_decode($message, true);
-        if (!$data) {
+        if (! $data) {
             $this->warn('Message invalide');
+
             return;
         }
 
@@ -125,43 +127,58 @@ class MqttListenBiometricCommand extends Command
             if ($device) {
                 $updateData = ['is_online' => true, 'last_sync_at' => now()];
                 // Synchroniser la version firmware si le terminal la reporte
-                if (!empty($data['firmware_version'])) {
+                if (! empty($data['firmware_version'])) {
                     $updateData['firmware_version'] = $data['firmware_version'];
                 }
                 $device->update($updateData);
                 event(new DeviceStatusUpdated('biometric', (string) $device->id, 'online', $data));
             }
+
             return;
         }
 
         // Handle enrollment response from device
         if (isset($data['action']) && $data['action'] === 'enrollment_result') {
             $this->processEnrollmentResult($data, $responseTopic);
+
+            return;
+        }
+
+        // Handle delete responses from device
+        if (isset($data['action']) && in_array($data['action'], ['delete_all_result', 'delete_result'], true)) {
+            $this->info("Reponse {$data['action']} du capteur {$serialNumber}: ".json_encode($data));
+
             return;
         }
 
         // Handle fingerprint scan
         $templateHash = $data['template_hash'] ?? null;
-        if (!$templateHash) {
+        if (! $templateHash) {
             $this->warn('template_hash manquant');
             $this->mqtt->publish($responseTopic, config('mqtt.response_codes.rejected'), MqttClient::QOS_AT_LEAST_ONCE);
+
             return;
         }
 
+        // Scoper par device : un meme template_hash (FP0001) peut exister sur
+        // plusieurs terminaux. Sans ce scope, first() retourne le mauvais employe.
         $enrollment = FingerprintEnrollment::where('template_hash', $templateHash)
+            ->when($device, fn ($q) => $q->where('device_id', $device->id))
             ->where('status', 'enrolled')
             ->first();
 
-        if (!$enrollment) {
+        if (! $enrollment) {
             $this->warn("Empreinte inconnue: {$templateHash}");
             $this->mqtt->publish($responseTopic, config('mqtt.response_codes.rejected'), MqttClient::QOS_AT_LEAST_ONCE);
+
             return;
         }
 
         $employee = $enrollment->employee;
-        if (!$employee || !$employee->is_active) {
+        if (! $employee || ! $employee->is_active) {
             $this->warn("Employe inactif pour empreinte: {$templateHash}");
             $this->mqtt->publish($responseTopic, config('mqtt.response_codes.refused'), MqttClient::QOS_AT_LEAST_ONCE);
+
             return;
         }
 
@@ -177,6 +194,7 @@ class MqttListenBiometricCommand extends Command
         if ($recentRecord) {
             $recentRecord->update(['is_double_badge' => true]);
             $this->mqtt->publish($responseTopic, config('mqtt.response_codes.accepted'), MqttClient::QOS_AT_LEAST_ONCE);
+
             return;
         }
 
@@ -197,7 +215,7 @@ class MqttListenBiometricCommand extends Command
                 ->first();
 
             if ($schedule) {
-                $endTime = \Carbon\Carbon::parse($today . ' ' . $schedule->end_time);
+                $endTime = \Carbon\Carbon::parse($today.' '.$schedule->end_time);
                 if ($exitTime->lt($endTime)) {
                     $earlyMinutes = (int) $exitTime->diffInMinutes($endTime);
                 }
@@ -220,7 +238,7 @@ class MqttListenBiometricCommand extends Command
                 ->first();
 
             if ($schedule) {
-                $startTime = \Carbon\Carbon::parse($today . ' ' . $schedule->start_time);
+                $startTime = \Carbon\Carbon::parse($today.' '.$schedule->start_time);
                 $tolerance = $schedule->late_tolerance ?? 0;
                 if ($entryTime->gt($startTime->addMinutes($tolerance))) {
                     $lateMinutes = (int) $entryTime->diffInMinutes($startTime);
@@ -250,23 +268,42 @@ class MqttListenBiometricCommand extends Command
         $templateHash = $data['template_hash'] ?? null;
         $success = $data['success'] ?? false;
 
-        if (!$enrollmentId) {
+        if (! $enrollmentId) {
             $this->warn('enrollment_id manquant dans enrollment_result');
+
             return;
         }
 
         $enrollment = FingerprintEnrollment::find($enrollmentId);
-        if (!$enrollment) {
+        if (! $enrollment) {
             $this->warn("Enrollment introuvable: {$enrollmentId}");
+
             return;
         }
 
         if ($success && $templateHash) {
-            $enrollment->update([
-                'status' => 'enrolled',
-                'template_hash' => $templateHash,
-                'enrolled_at' => now(),
-            ]);
+            // Le firmware renvoie le template_hash qu'il a reellement stocke.
+            // Normalement identique a celui pre-reserve par le backend. En cas
+            // d'ecart, on tente la mise a jour -- si elle viole l'index unique
+            // (collision avec un autre enrollment sur le meme device), on marque
+            // en failed et on alerte.
+            try {
+                $enrollment->update([
+                    'status' => 'enrolled',
+                    'template_hash' => $templateHash,
+                    'enrolled_at' => now(),
+                ]);
+            } catch (\Illuminate\Database\QueryException $e) {
+                // 23000 = MySQL integrity constraint / 23505 = PostgreSQL unique violation.
+                if (in_array($e->getCode(), ['23000', '23505'], true)) {
+                    $this->warn("Collision template_hash={$templateHash} sur device={$enrollment->device_id} -- enrollment {$enrollmentId} passe en failed");
+                    $enrollment->update(['status' => 'failed']);
+                    $this->mqtt->publish($responseTopic, config('mqtt.response_codes.rejected'), MqttClient::QOS_AT_LEAST_ONCE);
+
+                    return;
+                }
+                throw $e;
+            }
 
             $employee = Employee::find($enrollment->employee_id);
             if ($employee) {
@@ -282,7 +319,7 @@ class MqttListenBiometricCommand extends Command
                 'user_name' => $employee ? $employee->full_name : $enrollment->employee_id,
                 'action' => 'enrollment_completed',
                 'target' => $employee ? $employee->full_name : $enrollment->employee_id,
-                'details' => 'Enrolement biometrique reussi - template_hash: ' . substr($templateHash, 0, 12) . '...',
+                'details' => 'Enrolement biometrique reussi - template_hash: '.substr($templateHash, 0, 12).'...',
             ]);
 
             $this->mqtt->publish($responseTopic, config('mqtt.response_codes.accepted'), MqttClient::QOS_AT_LEAST_ONCE);
@@ -295,7 +332,7 @@ class MqttListenBiometricCommand extends Command
                 'user_name' => $enrollment->employee_id,
                 'action' => 'enrollment_failed',
                 'target' => $enrollment->employee_id,
-                'details' => 'Enrolement biometrique echoue - ' . ($data['error'] ?? 'Erreur inconnue'),
+                'details' => 'Enrolement biometrique echoue - '.($data['error'] ?? 'Erreur inconnue'),
             ]);
 
             $this->mqtt->publish($responseTopic, config('mqtt.response_codes.rejected'), MqttClient::QOS_AT_LEAST_ONCE);
@@ -308,27 +345,28 @@ class MqttListenBiometricCommand extends Command
         $this->info("Reponse OTA recue sur {$topic}: {$message}");
 
         $data = json_decode($message, true);
-        if (!$data) {
+        if (! $data) {
             $this->warn('Reponse OTA invalide: JSON malformé');
+
             return;
         }
 
-        $logId    = $data['log_id'] ?? null;
-        $success  = $data['success'] ?? false;
-        $version  = $data['version'] ?? null;
+        $logId = $data['log_id'] ?? null;
+        $success = $data['success'] ?? false;
+        $version = $data['version'] ?? null;
         $errorMsg = $data['error'] ?? null;
-        $serial   = explode('/', $topic)[1] ?? null;
+        $serial = explode('/', $topic)[1] ?? null;
 
         // Mettre à jour le log OTA
         if ($logId) {
             $log = OtaUpdateLog::find($logId);
             if ($log) {
                 $log->update([
-                    'status'        => $success ? 'success' : 'failed',
-                    'completed_at'  => now(),
+                    'status' => $success ? 'success' : 'failed',
+                    'completed_at' => now(),
                     'error_message' => $success ? null : ($errorMsg ?? 'Echec signale par le terminal'),
                 ]);
-                $this->info("OtaUpdateLog {$logId} mis a jour : " . ($success ? 'success' : 'failed'));
+                $this->info("OtaUpdateLog {$logId} mis a jour : ".($success ? 'success' : 'failed'));
             } else {
                 $this->warn("OtaUpdateLog introuvable: {$logId}");
             }
