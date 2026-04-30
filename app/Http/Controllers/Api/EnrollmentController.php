@@ -95,35 +95,57 @@ class EnrollmentController extends BaseApiController
             return $this->errorResponse('Le terminal est hors ligne', 422);
         }
 
-        // Retry en cas de course entre deux requetes concurrentes : l'index unique
-        // (device_id, template_hash) fait echouer la 2e insertion, on realloue.
-        $enrollment = null;
-        $fingerId = null;
-        for ($attempt = 0; $attempt < 5; $attempt++) {
-            $fingerId = $this->allocateFingerId($device->id);
-            if ($fingerId === null) {
-                return $this->errorResponse('Capacite du terminal atteinte (162 empreintes max)', 422);
-            }
+        // Réutiliser un enrollment pending existant pour éviter l'accumulation de slots bloqués
+        // quand l'utilisateur clique "Réessayer" avant que le firmware ait répondu.
+        $existingPending = FingerprintEnrollment::query()
+            ->where('employee_id', $employee->id)
+            ->where('device_id', $device->id)
+            ->where('status', 'pending')
+            ->latest()
+            ->first();
 
-            try {
-                $enrollment = FingerprintEnrollment::create([
-                    'employee_id' => $employee->id,
-                    'device_id' => $device->id,
-                    'status' => 'pending',
-                    'template_hash' => sprintf('FP%04d', $fingerId),
-                ]);
-                break;
-            } catch (\Illuminate\Database\QueryException $e) {
-                // 23000 = MySQL integrity constraint / 23505 = PostgreSQL unique violation.
-                if (! in_array($e->getCode(), ['23000', '23505'], true)) {
-                    throw $e;
+        if ($existingPending && preg_match('/^FP(\d{1,4})$/', (string) $existingPending->template_hash, $m)) {
+            $enrollment = $existingPending;
+            $fingerId = (int) $m[1];
+
+            // Invalider les éventuels autres pending en doublon pour ce (employee, device).
+            FingerprintEnrollment::query()
+                ->where('employee_id', $employee->id)
+                ->where('device_id', $device->id)
+                ->where('status', 'pending')
+                ->where('id', '!=', $enrollment->id)
+                ->update(['status' => 'failed']);
+        } else {
+            // Retry en cas de course entre deux requetes concurrentes : l'index unique
+            // (device_id, template_hash) fait echouer la 2e insertion, on realloue.
+            $enrollment = null;
+            $fingerId = null;
+            for ($attempt = 0; $attempt < 5; $attempt++) {
+                $fingerId = $this->allocateFingerId($device->id);
+                if ($fingerId === null) {
+                    return $this->errorResponse('Capacite du terminal atteinte (162 empreintes max)', 422);
                 }
-                // Duplicate key : un autre enrollment a pris le slot, on retry.
-            }
-        }
 
-        if ($enrollment === null) {
-            return $this->errorResponse('Impossible d\'allouer un slot AS608 apres plusieurs tentatives', 500);
+                try {
+                    $enrollment = FingerprintEnrollment::create([
+                        'employee_id' => $employee->id,
+                        'device_id' => $device->id,
+                        'status' => 'pending',
+                        'template_hash' => sprintf('FP%04d', $fingerId),
+                    ]);
+                    break;
+                } catch (\Illuminate\Database\QueryException $e) {
+                    // 23000 = MySQL integrity constraint / 23505 = PostgreSQL unique violation.
+                    if (! in_array($e->getCode(), ['23000', '23505'], true)) {
+                        throw $e;
+                    }
+                    // Duplicate key : un autre enrollment a pris le slot, on retry.
+                }
+            }
+
+            if ($enrollment === null) {
+                return $this->errorResponse('Impossible d\'allouer un slot AS608 apres plusieurs tentatives', 500);
+            }
         }
 
         $responseTopic = $mqtt->getResponseTopic($device->mqtt_topic);

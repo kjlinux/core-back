@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cahier des Charges — Agent Support IT</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Georgia', serif;
+      font-size: 12pt;
+      color: #000;
+      background: #fff;
+      line-height: 1.6;
+    }
+
+    /* ── Print & PDF layout ── */
+    @page {
+      size: A4;
+      margin: 20mm 18mm 20mm 18mm;
+    }
+    @media print {
+      .no-print { display: none; }
+      body { font-size: 11pt; }
+      section { page-break-inside: avoid; }
+      h2 { page-break-after: avoid; }
+    }
+
+    /* ── Page wrapper ── */
+    .page {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 40px 48px 60px;
+    }
+
+    /* ── Print button ── */
+    .no-print {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .no-print button {
+      padding: 10px 28px;
+      font-size: 13px;
+      background: #000;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+    }
+    .no-print button:hover { background: #333; }
+
+    /* ── Cover ── */
+    .cover {
+      border: 2px solid #000;
+      padding: 48px 40px;
+      margin-bottom: 48px;
+      text-align: center;
+    }
+    .cover .tag {
+      font-size: 10pt;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      border-bottom: 1px solid #000;
+      display: inline-block;
+      padding-bottom: 6px;
+      margin-bottom: 24px;
+    }
+    .cover h1 {
+      font-size: 24pt;
+      font-weight: bold;
+      line-height: 1.2;
+      margin-bottom: 12px;
+    }
+    .cover .subtitle {
+      font-size: 14pt;
+      font-style: italic;
+      margin-bottom: 32px;
+      color: #333;
+    }
+    .cover .meta {
+      font-size: 10pt;
+      color: #444;
+      line-height: 2;
+    }
+    .cover .meta strong { color: #000; }
+
+    /* ── Section headings ── */
+    section { margin-bottom: 40px; }
+
+    h2 {
+      font-size: 14pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      border-top: 2px solid #000;
+      border-bottom: 1px solid #000;
+      padding: 8px 0;
+      margin-bottom: 18px;
+    }
+    h2 .num {
+      font-size: 10pt;
+      margin-right: 8px;
+      color: #555;
+    }
+
+    h3 {
+      font-size: 12pt;
+      font-weight: bold;
+      margin: 22px 0 10px;
+      border-left: 3px solid #000;
+      padding-left: 10px;
+    }
+
+    p { margin-bottom: 10px; }
+
+    /* ── Intro box ── */
+    .intro-box {
+      border: 1px solid #000;
+      padding: 16px 20px;
+      margin-bottom: 14px;
+      background: #f7f7f7;
+    }
+    .intro-box p { margin: 0; font-style: italic; }
+
+    /* ── Tables ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 20px;
+      font-size: 11pt;
+    }
+    thead tr { background: #000; color: #fff; }
+    thead th {
+      padding: 9px 12px;
+      text-align: left;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+    }
+    tbody tr:nth-child(even) { background: #f2f2f2; }
+    tbody td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #ddd;
+      vertical-align: top;
+    }
+    .col-action { width: 38%; font-weight: 600; }
+    .col-desc   { width: 62%; }
+
+    /* ── Role comparison table ── */
+    .compare thead th { font-size: 10pt; text-align: center; }
+    .compare tbody td { text-align: center; font-size: 11pt; }
+    .compare tbody td:first-child { text-align: left; font-weight: 600; font-size: 10.5pt; }
+    .check   { font-size: 14pt; }
+    .yes     { color: #000; }
+    .no      { color: #aaa; }
+    .partial { color: #555; }
+
+    /* ── Warning box ── */
+    .warning {
+      border: 1px solid #000;
+      border-left: 4px solid #000;
+      padding: 12px 16px;
+      margin: 16px 0;
+      font-size: 10.5pt;
+    }
+    .warning strong { display: block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* ── Restricted list ── */
+    .restricted-list {
+      list-style: none;
+      padding: 0;
+    }
+    .restricted-list li {
+      padding: 8px 12px;
+      border-bottom: 1px solid #ddd;
+      display: flex;
+      gap: 12px;
+      font-size: 11pt;
+    }
+    .restricted-list li:last-child { border-bottom: none; }
+    .restricted-list .x { font-weight: bold; font-size: 13pt; flex-shrink: 0; }
+    .restricted-list .reason { color: #555; font-style: italic; font-size: 10pt; }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 60px;
+      border-top: 1px solid #000;
+      padding-top: 14px;
+      font-size: 9pt;
+      color: #555;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* ── Highlight badge ── */
+    .badge {
+      display: inline-block;
+      border: 1px solid #000;
+      padding: 2px 8px;
+      font-size: 9pt;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    ul.bullet {
+      padding-left: 20px;
+      margin: 8px 0 14px;
+    }
+    ul.bullet li { margin-bottom: 5px; }
+  </style>
+</head>
+<body>
+
+<div class="no-print">
+  <button onclick="window.print()">⬇ Imprimer / Exporter en PDF</button>
+</div>
+
+<div class="page">
+
+  <!-- COVER -->
+  <div class="cover">
+    <div class="tag">Document Officiel &nbsp;·&nbsp; Confidentiel</div>
+    <h1>Cahier des Charges<br>Agent Support IT</h1>
+    <div class="subtitle">Télésupport à distance pour entreprises clientes</div>
+    <div class="meta">
+      <strong>Projet :</strong> Plateforme de gestion RH, Présences &amp; Dispositifs IoT<br>
+      <strong>Date d'émission :</strong> 28 avril 2026<br>
+      <strong>Version :</strong> 1.0<br>
+      <strong>Statut :</strong> Proposition initiale
+    </div>
+  </div>
+
+  <!-- 1. CONTEXTE -->
+  <section>
+    <h2><span class="num">01</span>Contexte &amp; Objectif</h2>
+    <div class="intro-box">
+      <p>Ce document décrit le rôle, les responsabilités et les fonctionnalités de l'<strong>Agent Support IT</strong> au sein de la plateforme. Il est destiné à présenter de manière claire et non technique ce que cet utilisateur peut faire, dans quels cas il intervient, et ce qui reste hors de son périmètre.</p>
+    </div>
+    <p>La plateforme gère plusieurs entreprises clientes et leurs dispositifs physiques sur site : lecteurs biométriques d'empreintes digitales, badges RFID, codes QR, bornes de satisfaction client, et bien d'autres. Ces dispositifs enregistrent les présences, gèrent les accès et collectent des retours en temps réel.</p>
+    <p>Lorsqu'une entreprise cliente rencontre un problème — un lecteur qui ne répond plus, un badge bloqué, des pointages incorrects — l'<strong>Agent Support IT</strong> intervient à distance, sans déplacement physique, pour diagnostiquer et résoudre l'incident rapidement.</p>
+  </section>
+
+  <!-- 2. QUI EST L'AGENT SUPPORT IT -->
+  <section>
+    <h2><span class="num">02</span>Qui est l'Agent Support IT ?</h2>
+    <p>L'Agent Support IT est un <strong>opérateur de niveau 2</strong> au sein de l'équipe technique. Il n'est ni un simple utilisateur de l'entreprise, ni un administrateur général de la plateforme. Son positionnement est le suivant :</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Profil</th>
+          <th>Rôle principal</th>
+          <th>Intervention</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Technicien</strong></td>
+          <td>Installation des dispositifs sur site</td>
+          <td>Physique (déplacement)</td>
+        </tr>
+        <tr>
+          <td><strong>Agent Support IT</strong> <span class="badge">Ce rôle</span></td>
+          <td>Diagnostic et résolution d'incidents</td>
+          <td>À distance (téléopération)</td>
+        </tr>
+        <tr>
+          <td><strong>Super Administrateur</strong></td>
+          <td>Pilotage global de la plateforme</td>
+          <td>Configuration stratégique</td>
+        </tr>
+        <tr>
+          <td><strong>Admin Entreprise</strong></td>
+          <td>Gestion interne de son entreprise</td>
+          <td>Au sein de son périmètre uniquement</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>L'Agent Support IT a accès à <strong>toutes les entreprises clientes</strong> de la plateforme, ce qui lui permet d'intervenir sur n'importe quel client sans changer de compte.</p>
+  </section>
+
+  <!-- 3. FONCTIONNALITÉS -->
+  <section>
+    <h2><span class="num">03</span>Ce que l'Agent Support IT peut faire</h2>
+
+    <h3>Gestion des comptes utilisateurs</h3>
+    <p>En cas de problème d'accès signalé par un employé ou un administrateur d'entreprise :</p>
+    <table>
+      <thead>
+        <tr><th class="col-action">Action</th><th class="col-desc">Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Consulter les utilisateurs</td>
+          <td>Voir les comptes existants, leurs rôles et leur statut (actif, bloqué)</td>
+        </tr>
+        <tr>
+          <td>Réinitialiser un mot de passe</td>
+          <td>Permettre à un utilisateur bloqué de retrouver l'accès à son compte</td>
+        </tr>
+        <tr>
+          <td>Débloquer un compte</td>
+          <td>Réactiver un compte suspendu suite à un incident ou une erreur de configuration</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Supervision des lecteurs biométriques</h3>
+    <p>Les lecteurs d'empreintes digitales peuvent tomber hors ligne, se désynchroniser ou produire des erreurs. L'agent peut :</p>
+    <table>
+      <thead>
+        <tr><th class="col-action">Action</th><th class="col-desc">Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Voir l'état des dispositifs</td>
+          <td>Savoir si un lecteur est en ligne, hors ligne, ou en erreur</td>
+        </tr>
+        <tr>
+          <td>Consulter les journaux d'activité</td>
+          <td>Identifier l'origine d'un dysfonctionnement (synchronisation ratée, empreinte non reconnue)</td>
+        </tr>
+        <tr>
+          <td>Corriger les doublons d'empreintes</td>
+          <td>Réinitialiser des empreintes enregistrées en double qui bloquent un employé</td>
+        </tr>
+        <tr>
+          <td>Déclencher une resynchronisation</td>
+          <td>Forcer manuellement la mise à jour d'un dispositif depuis la plateforme</td>
+        </tr>
+        <tr>
+          <td>Tester la connexion d'un dispositif</td>
+          <td>Vérifier que le lecteur communique bien avec le serveur</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Gestion des badges RFID</h3>
+    <table>
+      <thead>
+        <tr><th class="col-action">Action</th><th class="col-desc">Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Consulter les badges</td>
+          <td>Voir la liste des badges et leur état (assigné, bloqué, disponible)</td>
+        </tr>
+        <tr>
+          <td>Bloquer ou débloquer un badge</td>
+          <td>En cas de perte, de vol ou d'erreur d'accès</td>
+        </tr>
+        <tr>
+          <td>Réassigner un badge</td>
+          <td>Changer le propriétaire d'un badge (ex. départ d'un employé)</td>
+        </tr>
+        <tr>
+          <td>Consulter l'historique d'un badge</td>
+          <td>Voir toutes les modifications passées pour traçabilité</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Supervision des présences &amp; pointages</h3>
+    <table>
+      <thead>
+        <tr><th class="col-action">Action</th><th class="col-desc">Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Consulter les pointages</td>
+          <td>Voir les enregistrements d'arrivée/départ par employé, département, ou période</td>
+        </tr>
+        <tr>
+          <td>Identifier les anomalies</td>
+          <td>Repérer des pointages manquants, des absences non justifiées ou des erreurs de source</td>
+        </tr>
+        <tr>
+          <td>Corriger un pointage erroné</td>
+          <td>Modifier manuellement une entrée incorrecte suite à un incident technique</td>
+        </tr>
+        <tr>
+          <td>Gérer les codes QR de pointage</td>
+          <td>Vérifier la validité d'un code QR, le révoquer ou en générer un nouveau si nécessaire</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Bornes Feelback &amp; enquêtes de satisfaction</h3>
+    <table>
+      <thead>
+        <tr><th class="col-action">Action</th><th class="col-desc">Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Voir les bornes de satisfaction</td>
+          <td>Statut de chaque borne, site d'affectation</td>
+        </tr>
+        <tr>
+          <td>Consulter les alertes non traitées</td>
+          <td>Identifier les alertes de satisfaction déclenchées et non prises en charge</td>
+        </tr>
+        <tr>
+          <td>Accéder aux retours clients</td>
+          <td>Lecture seule des réponses aux enquêtes de satisfaction (pas de modification)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Mises à jour logicielles des dispositifs (OTA)</h3>
+    <table>
+      <thead>
+        <tr><th class="col-action">Action</th><th class="col-desc">Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Consulter les versions disponibles</td>
+          <td>Voir quels firmwares sont disponibles et leur état de déploiement</td>
+        </tr>
+        <tr>
+          <td>Suivre l'avancement des mises à jour</td>
+          <td>Savoir quels dispositifs sont à jour et lesquels sont en retard</td>
+        </tr>
+        <tr>
+          <td>Déclencher une mise à jour ciblée</td>
+          <td>Lancer manuellement la mise à jour d'un dispositif précis en cas de problème</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Tableau de bord &amp; supervision globale</h3>
+    <table>
+      <thead>
+        <tr><th class="col-action">Action</th><th class="col-desc">Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Vue multi-entreprises</td>
+          <td>Synthèse des alertes actives, dispositifs hors ligne et incidents en cours sur toutes les entreprises</td>
+        </tr>
+        <tr>
+          <td>Changer de contexte entreprise</td>
+          <td>Naviguer rapidement d'une entreprise cliente à une autre</td>
+        </tr>
+        <tr>
+          <td>Consulter les statistiques de présence</td>
+          <td>Taux de présence, retards et absences par entreprise pour détecter des anomalies</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Traçabilité de ses propres actions</h3>
+    <div class="warning">
+      <strong>Principe fondamental</strong>
+      Toutes les actions correctives réalisées par l'Agent Support IT sont <strong>automatiquement enregistrées</strong> dans un journal d'activité horodaté. Cela garantit la transparence vis-à-vis du client et la responsabilité de l'intervenant.
+    </div>
+  </section>
+
+  <!-- 4. RESTRICTIONS -->
+  <section>
+    <h2><span class="num">04</span>Ce que l'Agent Support IT ne peut PAS faire</h2>
+    <p>Par mesure de sécurité et de séparation des responsabilités, certaines actions restent réservées à d'autres profils :</p>
+    <ul class="restricted-list">
+      <li>
+        <span class="x">✕</span>
+        <div>
+          <div><strong>Créer ou supprimer une entreprise</strong></div>
+          <div class="reason">Réservé au Super Administrateur — action stratégique avec impact global</div>
+        </div>
+      </li>
+      <li>
+        <span class="x">✕</span>
+        <div>
+          <div><strong>Accéder aux bulletins de paie &amp; configurer la paie</strong></div>
+          <div class="reason">Données confidentielles RH — réservées à l'Admin Entreprise</div>
+        </div>
+      </li>
+      <li>
+        <span class="x">✕</span>
+        <div>
+          <div><strong>Supprimer des employés</strong></div>
+          <div class="reason">Action sensible et irréversible — réservée à l'Admin Entreprise</div>
+        </div>
+      </li>
+      <li>
+        <span class="x">✕</span>
+        <div>
+          <div><strong>Publier une nouvelle version firmware pour tous les dispositifs</strong></div>
+          <div class="reason">Action à impact global — réservée au Super Administrateur</div>
+        </div>
+      </li>
+      <li>
+        <span class="x">✕</span>
+        <div>
+          <div><strong>Gérer le catalogue produits &amp; les commandes (marketplace)</strong></div>
+          <div class="reason">Périmètre commercial — réservé à l'Admin Entreprise et au Manager</div>
+        </div>
+      </li>
+      <li>
+        <span class="x">✕</span>
+        <div>
+          <div><strong>Envoyer des commandes réseau globales (MQTT)</strong></div>
+          <div class="reason">Risque d'impact sur l'ensemble du parc — réservé au Super Administrateur</div>
+        </div>
+      </li>
+      <li>
+        <span class="x">✕</span>
+        <div>
+          <div><strong>Configurer les règles de retard &amp; de pénalités</strong></div>
+          <div class="reason">Paramètres métier internes — réservés à l'Admin Entreprise</div>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- 5. COMPARATIF -->
+  <section>
+    <h2><span class="num">05</span>Comparatif des rôles</h2>
+    <p>Le tableau ci-dessous positionne l'Agent Support IT par rapport aux autres profils de la plateforme :</p>
+    <table class="compare">
+      <thead>
+        <tr>
+          <th style="text-align:left">Capacité</th>
+          <th>Super Admin</th>
+          <th>Technicien</th>
+          <th>Support IT</th>
+          <th>Admin Entreprise</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Accès toutes les entreprises</td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check no">○</span></td>
+        </tr>
+        <tr>
+          <td>Intervention physique sur site</td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check no">○</span></td>
+          <td><span class="check no">○</span></td>
+        </tr>
+        <tr>
+          <td>Correction des pointages</td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check yes">●</span></td>
+        </tr>
+        <tr>
+          <td>Diagnostic biométrique à distance</td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check no">○</span></td>
+        </tr>
+        <tr>
+          <td>Gestion des badges RFID</td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check yes">●</span></td>
+        </tr>
+        <tr>
+          <td>Mise à jour logicielle ciblée</td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check no">○</span></td>
+        </tr>
+        <tr>
+          <td>Publication firmware globale</td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check no">○</span></td>
+          <td><span class="check no">○</span></td>
+          <td><span class="check no">○</span></td>
+        </tr>
+        <tr>
+          <td>Gestion paie &amp; salaires</td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check no">○</span></td>
+          <td><span class="check no">○</span></td>
+          <td><span class="check yes">●</span></td>
+        </tr>
+        <tr>
+          <td>Gestion marketplace</td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check no">○</span></td>
+          <td><span class="check no">○</span></td>
+          <td><span class="check yes">●</span></td>
+        </tr>
+        <tr>
+          <td>Commandes réseau MQTT globales</td>
+          <td><span class="check yes">●</span></td>
+          <td><span class="check no">○</span></td>
+          <td><span class="check no">○</span></td>
+          <td><span class="check no">○</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size:10pt;color:#555;margin-top:-10px"><span style="margin-right:16px">● Autorisé</span> <span>○ Non autorisé</span></p>
+  </section>
+
+  <!-- 6. CAS D'USAGE -->
+  <section>
+    <h2><span class="num">06</span>Exemples de cas d'intervention</h2>
+
+    <h3>Cas 1 — Lecteur biométrique hors ligne</h3>
+    <p>Une entreprise signale que son lecteur d'empreintes ne reconnaît plus les employés depuis ce matin. L'Agent Support IT se connecte, consulte le statut du dispositif, identifie une erreur de synchronisation dans les journaux, et déclenche une resynchronisation forcée depuis la plateforme. Le problème est résolu en moins de 10 minutes sans déplacement.</p>
+
+    <h3>Cas 2 — Badge RFID perdu</h3>
+    <p>Un employé signale la perte de son badge. L'agent localise le badge dans la plateforme, le bloque immédiatement pour empêcher toute utilisation frauduleuse, puis réassigne un nouveau badge à l'employé concerné.</p>
+
+    <h3>Cas 3 — Pointage incorrect</h3>
+    <p>Un responsable RH constate qu'un employé a un pointage de sortie manquant un jour donné à cause d'un incident sur le lecteur. L'agent corrige manuellement l'enregistrement de présence avec l'heure réelle, puis laisse une trace dans le journal d'activité.</p>
+
+    <h3>Cas 4 — Code QR de pointage compromis</h3>
+    <p>Un code QR affiché dans un couloir a été photographié et partagé en dehors de l'entreprise. L'agent révoque immédiatement le code et en génère un nouveau, qui sera affiché à la place.</p>
+  </section>
+
+  <!-- 7. ÉVOLUTIONS -->
+  <section>
+    <h2><span class="num">07</span>Évolutions futures envisagées</h2>
+    <ul class="bullet">
+      <li><strong>Système de tickets :</strong> suivi structuré des incidents ouverts, en cours et résolus</li>
+      <li><strong>Chat en temps réel</strong> avec l'administrateur de l'entreprise cliente pendant une intervention</li>
+      <li><strong>Escalade vers le Super Administrateur</strong> pour les incidents nécessitant une intervention de niveau supérieur</li>
+      <li><strong>Rapport d'intervention PDF</strong> automatiquement généré et transmis au client après chaque résolution</li>
+      <li><strong>Alertes proactives :</strong> notifier automatiquement l'agent lorsqu'un dispositif passe hors ligne</li>
+    </ul>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <span>Plateforme RH &amp; IoT — Cahier des Charges Agent Support IT</span>
+    <span>Version 1.0 &nbsp;·&nbsp; 28 avril 2026 &nbsp;·&nbsp; Confidentiel</span>
+  </footer>
+
+</div>
+
+</body>
+</html>
