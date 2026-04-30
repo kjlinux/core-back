@@ -216,15 +216,14 @@ class EnrollmentController extends BaseApiController
 
     /**
      * Calcule le plus petit slot AS608 libre (1..FP_MAX_TEMPLATES) pour un device.
-     * Considere comme occupes tous les enrollments non-failed (pending + enrolled)
-     * pour eviter une course entre deux creations simultanees.
+     * Considere comme occupes TOUS les enrollments existants (y compris failed),
+     * car l'index unique (device_id, template_hash) couvre tous les statuts.
      * Retourne null si la capacite est atteinte.
      */
     private function allocateFingerId(string $deviceId): ?int
     {
         $usedHashes = FingerprintEnrollment::query()
             ->where('device_id', $deviceId)
-            ->whereIn('status', ['pending', 'enrolled'])
             ->pluck('template_hash')
             ->all();
 
