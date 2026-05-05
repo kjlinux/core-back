@@ -63,7 +63,7 @@ class CheckDeviceHealthCommand extends Command
                 'type' => DeviceAlert::TYPE_OFFLINE_THRESHOLD,
                 'severity' => $device->is_witness ? DeviceAlert::SEVERITY_CRITICAL : DeviceAlert::SEVERITY_HIGH,
                 'title' => "Capteur {$kind} hors ligne : " . ($device->name ?? $device->serial_number ?? $device->id),
-                'message' => "Aucun signal depuis plus que le seuil. Dernier contact: " . ($device->{$timeColumn}?->diffForHumans() ?? 'inconnu'),
+                'message' => "Aucun signal depuis plus que le seuil. Dernier contact: " . ($device->{$timeColumn}?->locale('fr')->diffForHumans() ?? 'inconnu'),
                 'context' => [
                     'serial_number' => $device->serial_number ?? null,
                     'last_seen' => $device->{$timeColumn}?->toISOString(),
