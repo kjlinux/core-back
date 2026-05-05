@@ -90,8 +90,35 @@ class SupportController extends BaseApiController
 
     public function deviceDetail(string $kind, string $id): JsonResponse
     {
-        $device = $this->findDevice($kind, $id);
-        if (!$device) return $this->errorResponse('Capteur introuvable', 404);
+        $model = match ($kind) {
+            'rfid' => RfidDevice::query()->withoutGlobalScopes()->with(['site:id,name', 'company:id,name'])->find($id),
+            'biometric' => BiometricDevice::query()->withoutGlobalScopes()->with(['site:id,name', 'company:id,name'])->find($id),
+            'feelback' => FeelbackDevice::query()->withoutGlobalScopes()->with(['site:id,name', 'company:id,name'])->find($id),
+            'qr' => \App\Models\QrCode::query()->withoutGlobalScopes()->with(['site:id,name', 'company:id,name'])->find($id),
+            default => null,
+        };
+        if (!$model) return $this->errorResponse('Capteur introuvable', 404);
+
+        $timeCol = match ($kind) {
+            'biometric' => 'last_sync_at',
+            default => 'last_ping_at',
+        };
+
+        $device = [
+            'id' => $model->id,
+            'kind' => $kind,
+            'name' => $model->name ?? $model->label ?? $model->serial_number ?? $model->id,
+            'serial_number' => $model->serial_number ?? null,
+            'company_id' => $model->company_id ?? null,
+            'company_name' => $model->company?->name,
+            'site_id' => $model->site_id ?? null,
+            'site_name' => $model->site?->name,
+            'is_online' => (bool) $model->is_online,
+            'is_witness' => (bool) ($model->is_witness ?? false),
+            'firmware_version' => $model->firmware_version ?? null,
+            'last_ping_at' => $model->{$timeCol}?->toIso8601String(),
+            'last_sync_at' => $kind === 'biometric' ? $model->last_sync_at?->toIso8601String() : null,
+        ];
 
         $alerts = DeviceAlert::query()
             ->where('device_kind', $kind)
