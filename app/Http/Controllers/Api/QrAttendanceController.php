@@ -2,11 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\QrCode;
-use App\Models\QrAttendanceRecord;
 use App\Models\Employee;
-use App\Models\Schedule;
-use Carbon\Carbon;
+use App\Models\QrAttendanceRecord;
+use App\Models\QrCode;
+use App\Services\ScheduleResolverService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -18,10 +17,10 @@ class QrAttendanceController extends BaseApiController
 
         $this->scopeByCompany($query);
 
-        $query->when($request->input('date'), fn($q, $v) => $q->whereDate('date', $v));
-        $query->when($request->input('employee_id'), fn($q, $v) => $q->where('employee_id', $v));
-        $query->when($request->input('status'), fn($q, $v) => $q->where('status', $v));
-        $query->when($request->input('gps_verified'), fn($q, $v) => $q->where('gps_verified', filter_var($v, FILTER_VALIDATE_BOOLEAN)));
+        $query->when($request->input('date'), fn ($q, $v) => $q->whereDate('date', $v));
+        $query->when($request->input('employee_id'), fn ($q, $v) => $q->where('employee_id', $v));
+        $query->when($request->input('status'), fn ($q, $v) => $q->where('status', $v));
+        $query->when($request->input('gps_verified'), fn ($q, $v) => $q->where('gps_verified', filter_var($v, FILTER_VALIDATE_BOOLEAN)));
 
         $records = $query->orderBy('scanned_at', 'desc')->paginate($request->input('per_page', 15));
 
@@ -39,10 +38,10 @@ class QrAttendanceController extends BaseApiController
     public function scan(Request $request): JsonResponse
     {
         $request->validate([
-            'token'              => 'required|string',
+            'token' => 'required|string',
             'device_fingerprint' => 'required|string|max:64',
-            'latitude'           => 'nullable|numeric|between:-90,90',
-            'longitude'          => 'nullable|between:-180,180',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|between:-180,180',
         ]);
 
         // 1. Vérifier le QR Code du site
@@ -51,7 +50,7 @@ class QrAttendanceController extends BaseApiController
             ->with('site')
             ->first();
 
-        if (!$qrCode) {
+        if (! $qrCode) {
             return $this->errorResponse('QR Code invalide ou inactif', 404);
         }
 
@@ -61,7 +60,7 @@ class QrAttendanceController extends BaseApiController
             ->where('is_active', true)
             ->first();
 
-        if (!$employee) {
+        if (! $employee) {
             return $this->errorResponse(
                 'Appareil non reconnu. Veuillez enroler votre telephone aupres de votre responsable.',
                 403
@@ -107,31 +106,29 @@ class QrAttendanceController extends BaseApiController
             ->latest()
             ->first();
 
-        if ($existing && !$existing->exit_time) {
+        $resolver = app(ScheduleResolverService::class);
+
+        if ($existing && ! $existing->exit_time) {
             $exitTime = now();
             $exitStatus = $existing->status;
 
-            $schedule = Schedule::where('company_id', $qrCode->company_id)
-                ->whereJsonContains('assigned_departments', $employee->department_id)
-                ->first();
+            $schedule = $resolver->resolveForEmployee($qrCode->company_id, $employee->department_id, $exitTime);
 
-            if ($schedule) {
-                $endTime = Carbon::parse(today()->toDateString().' '.$schedule->end_time);
-                if ($exitTime->lt($endTime)) {
-                    $exitStatus = 'left_early';
-                }
+            if ($schedule && $resolver->calculateEarlyDepartureMinutes($schedule, $exitTime) > 0) {
+                $exitStatus = 'left_early';
             }
 
             $existing->update([
-                'exit_time'        => $exitTime->format('H:i:s'),
-                'status'           => $exitStatus,
-                'scanned_at'       => $exitTime,
-                'scan_latitude'    => $request->input('latitude'),
-                'scan_longitude'   => $request->input('longitude'),
-                'gps_verified'     => $gpsVerified,
-                'distance_meters'  => $distanceMeters,
+                'exit_time' => $exitTime->format('H:i:s'),
+                'status' => $exitStatus,
+                'scanned_at' => $exitTime,
+                'scan_latitude' => $request->input('latitude'),
+                'scan_longitude' => $request->input('longitude'),
+                'gps_verified' => $gpsVerified,
+                'distance_meters' => $distanceMeters,
             ]);
             $existing->load('employee');
+
             return $this->resourceResponse(
                 new \App\Http\Resources\QrAttendanceRecordResource($existing),
                 'Sortie enregistree'
@@ -142,31 +139,25 @@ class QrAttendanceController extends BaseApiController
         $entryTime = now();
         $status = 'present';
 
-        $schedule = Schedule::where('company_id', $qrCode->company_id)
-            ->whereJsonContains('assigned_departments', $employee->department_id)
-            ->first();
+        $schedule = $resolver->resolveForEmployee($qrCode->company_id, $employee->department_id, $entryTime);
 
-        if ($schedule) {
-            $startTime = Carbon::parse(today()->toDateString().' '.$schedule->start_time);
-            $tolerance = $schedule->late_tolerance ?? 0;
-            if ($entryTime->gt($startTime->copy()->addMinutes($tolerance))) {
-                $status = 'late';
-            }
+        if ($schedule && $resolver->calculateLateMinutes($schedule, $entryTime) > 0) {
+            $status = 'late';
         }
 
         $record = QrAttendanceRecord::create([
-            'employee_id'        => $employee->id,
-            'qr_code_id'         => $qrCode->id,
-            'company_id'         => $qrCode->company_id,
-            'date'               => today(),
-            'entry_time'         => $entryTime->format('H:i:s'),
-            'status'             => $status,
-            'scanned_at'         => $entryTime,
+            'employee_id' => $employee->id,
+            'qr_code_id' => $qrCode->id,
+            'company_id' => $qrCode->company_id,
+            'date' => today(),
+            'entry_time' => $entryTime->format('H:i:s'),
+            'status' => $status,
+            'scanned_at' => $entryTime,
             'device_fingerprint' => $request->input('device_fingerprint'),
-            'scan_latitude'      => $request->input('latitude'),
-            'scan_longitude'     => $request->input('longitude'),
-            'gps_verified'       => $gpsVerified,
-            'distance_meters'    => $distanceMeters,
+            'scan_latitude' => $request->input('latitude'),
+            'scan_longitude' => $request->input('longitude'),
+            'gps_verified' => $gpsVerified,
+            'distance_meters' => $distanceMeters,
         ]);
 
         $record->load('employee');

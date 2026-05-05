@@ -9,7 +9,7 @@ use App\Models\AttendanceRecord;
 use App\Models\OtaUpdateLog;
 use App\Models\RfidCard;
 use App\Models\RfidDevice;
-use App\Models\Schedule;
+use App\Services\ScheduleResolverService;
 use Illuminate\Console\Command;
 use PhpMqtt\Client\ConnectionSettings;
 use PhpMqtt\Client\MqttClient;
@@ -154,12 +154,13 @@ class MqttListenRfidCommand extends Command
             if ($device) {
                 event(new CardScanned($cardUid, (string) $device->id));
             }
+
             return;
         }
         if ($device) {
             $updateData = ['is_online' => true, 'last_ping_at' => now()];
             // Synchroniser la version firmware si le terminal la reporte
-            if (!empty($data['firmware_version'])) {
+            if (! empty($data['firmware_version'])) {
                 $updateData['firmware_version'] = $data['firmware_version'];
             }
             $device->update($updateData);
@@ -217,20 +218,17 @@ class MqttListenRfidCommand extends Command
             ->latest()
             ->first();
 
+        $resolver = app(ScheduleResolverService::class);
+
         if ($existingRecord) {
             // Exit badge
             $exitTime = now();
             $earlyMinutes = 0;
 
-            $schedule = Schedule::where('company_id', $employee->company_id)
-                ->whereJsonContains('assigned_departments', $employee->department_id)
-                ->first();
+            $schedule = $resolver->resolveForEmployee($employee->company_id, $employee->department_id, $exitTime);
 
             if ($schedule) {
-                $endTime = \Carbon\Carbon::parse($today.' '.$schedule->end_time);
-                if ($exitTime->lt($endTime)) {
-                    $earlyMinutes = (int) $exitTime->diffInMinutes($endTime);
-                }
+                $earlyMinutes = $resolver->calculateEarlyDepartureMinutes($schedule, $exitTime);
             }
 
             $existingRecord->update([
@@ -247,17 +245,11 @@ class MqttListenRfidCommand extends Command
             $lateMinutes = 0;
             $status = 'present';
 
-            $schedule = Schedule::where('company_id', $employee->company_id)
-                ->whereJsonContains('assigned_departments', $employee->department_id)
-                ->first();
+            $schedule = $resolver->resolveForEmployee($employee->company_id, $employee->department_id, $entryTime);
 
             if ($schedule) {
-                $startTime = \Carbon\Carbon::parse($today.' '.$schedule->start_time);
-                $tolerance = $schedule->late_tolerance ?? 0;
-                if ($entryTime->gt($startTime->addMinutes($tolerance))) {
-                    $lateMinutes = (int) $entryTime->diffInMinutes($startTime);
-                    $status = 'late';
-                }
+                $lateMinutes = $resolver->calculateLateMinutes($schedule, $entryTime);
+                $status = $lateMinutes > 0 ? 'late' : 'present';
             }
 
             $record = AttendanceRecord::create([
@@ -281,27 +273,28 @@ class MqttListenRfidCommand extends Command
         $this->info("Reponse OTA recue sur {$topic}: {$message}");
 
         $data = json_decode($message, true);
-        if (!$data) {
+        if (! $data) {
             $this->warn('Reponse OTA invalide: JSON malformé');
+
             return;
         }
 
-        $logId      = $data['log_id'] ?? null;
-        $success    = $data['success'] ?? false;
-        $version    = $data['version'] ?? null;
-        $errorMsg   = $data['error'] ?? null;
-        $serial     = explode('/', $topic)[1] ?? null;
+        $logId = $data['log_id'] ?? null;
+        $success = $data['success'] ?? false;
+        $version = $data['version'] ?? null;
+        $errorMsg = $data['error'] ?? null;
+        $serial = explode('/', $topic)[1] ?? null;
 
         // Mettre à jour le log OTA
         if ($logId) {
             $log = OtaUpdateLog::find($logId);
             if ($log) {
                 $log->update([
-                    'status'        => $success ? 'success' : 'failed',
-                    'completed_at'  => now(),
+                    'status' => $success ? 'success' : 'failed',
+                    'completed_at' => now(),
                     'error_message' => $success ? null : ($errorMsg ?? 'Echec signale par le terminal'),
                 ]);
-                $this->info("OtaUpdateLog {$logId} mis a jour : " . ($success ? 'success' : 'failed'));
+                $this->info("OtaUpdateLog {$logId} mis a jour : ".($success ? 'success' : 'failed'));
             } else {
                 $this->warn("OtaUpdateLog introuvable: {$logId}");
             }

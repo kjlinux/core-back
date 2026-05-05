@@ -15,10 +15,13 @@ class SupportItSeeder extends Seeder
         $now = Carbon::now();
 
         $companyId = (string) Str::uuid();
-        if (!DB::table('companies')->where('name', 'Support IT Tanga')->exists()) {
+        if (! DB::table('companies')->where('name', 'Support IT Tanga')->exists()) {
             DB::table('companies')->insert([
                 'id' => $companyId,
                 'name' => 'Support IT Tanga',
+                'email' => 'support@tanga.com',
+                'phone' => '00000000',
+                'address' => 'Locaux Support Tanga',
                 'is_active' => true,
                 'created_at' => $now,
                 'updated_at' => $now,
@@ -28,17 +31,18 @@ class SupportItSeeder extends Seeder
         }
 
         $siteId = (string) Str::uuid();
-        if (!DB::table('sites')->where('name', 'Locaux Support')->where('company_id', $companyId)->exists()) {
+        if (! DB::table('sites')->where('name', 'Locaux Support')->where('company_id', $companyId)->exists()) {
             DB::table('sites')->insert([
                 'id' => $siteId,
                 'company_id' => $companyId,
                 'name' => 'Locaux Support',
+                'address' => 'Locaux Support Tanga',
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
         }
 
-        if (!DB::table('users')->where('email', 'support@tanga.com')->exists()) {
+        if (! DB::table('users')->where('email', 'support@tanga.com')->exists()) {
             DB::table('users')->insert([
                 'name' => 'Support IT',
                 'first_name' => 'Support',

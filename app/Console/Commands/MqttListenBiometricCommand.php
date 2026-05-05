@@ -10,7 +10,7 @@ use App\Models\BiometricDevice;
 use App\Models\Employee;
 use App\Models\FingerprintEnrollment;
 use App\Models\OtaUpdateLog;
-use App\Models\Schedule;
+use App\Services\ScheduleResolverService;
 use Illuminate\Console\Command;
 use PhpMqtt\Client\ConnectionSettings;
 use PhpMqtt\Client\MqttClient;
@@ -215,19 +215,16 @@ class MqttListenBiometricCommand extends Command
             ->latest()
             ->first();
 
+        $resolver = app(ScheduleResolverService::class);
+
         if ($existingRecord) {
             $exitTime = now();
             $earlyMinutes = 0;
 
-            $schedule = Schedule::where('company_id', $employee->company_id)
-                ->whereJsonContains('assigned_departments', $employee->department_id)
-                ->first();
+            $schedule = $resolver->resolveForEmployee($employee->company_id, $employee->department_id, $exitTime);
 
             if ($schedule) {
-                $endTime = \Carbon\Carbon::parse($today.' '.$schedule->end_time);
-                if ($exitTime->lt($endTime)) {
-                    $earlyMinutes = (int) $exitTime->diffInMinutes($endTime);
-                }
+                $earlyMinutes = $resolver->calculateEarlyDepartureMinutes($schedule, $exitTime);
             }
 
             $existingRecord->update([
@@ -242,17 +239,11 @@ class MqttListenBiometricCommand extends Command
             $lateMinutes = 0;
             $status = 'present';
 
-            $schedule = Schedule::where('company_id', $employee->company_id)
-                ->whereJsonContains('assigned_departments', $employee->department_id)
-                ->first();
+            $schedule = $resolver->resolveForEmployee($employee->company_id, $employee->department_id, $entryTime);
 
             if ($schedule) {
-                $startTime = \Carbon\Carbon::parse($today.' '.$schedule->start_time);
-                $tolerance = $schedule->late_tolerance ?? 0;
-                if ($entryTime->gt($startTime->addMinutes($tolerance))) {
-                    $lateMinutes = (int) $entryTime->diffInMinutes($startTime);
-                    $status = 'late';
-                }
+                $lateMinutes = $resolver->calculateLateMinutes($schedule, $entryTime);
+                $status = $lateMinutes > 0 ? 'late' : 'present';
             }
 
             $record = AttendanceRecord::create([
