@@ -26,7 +26,7 @@ trait BelongsToCompany
     {
         static::addGlobalScope('company', function (Builder $builder) {
             $user = auth()->user();
-            if ($user && $user->role !== 'super_admin' && $user->company_id) {
+            if ($user && !in_array($user->role, ['super_admin', 'support_it']) && $user->company_id) {
                 $builder->where($builder->getModel()->getTable() . '.company_id', $user->company_id);
             }
         });

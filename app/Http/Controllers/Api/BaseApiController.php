@@ -88,7 +88,7 @@ class BaseApiController extends Controller
             'all_params'       => request()->query(),
         ]);
 
-        if ($user->isSuperAdmin()) {
+        if ($user->isSuperAdmin() || $user->isSupportIt()) {
             return $activeCompanyId ?: null;
         }
 
@@ -111,8 +111,8 @@ class BaseApiController extends Controller
         $user = auth()->user();
         if (!$user) return $data;
 
-        if ($user->isSuperAdmin()) {
-            // super_admin peut explicitement passer un company_id
+        if ($user->isSuperAdmin() || $user->isSupportIt()) {
+            // super_admin / support_it peuvent explicitement passer un company_id
             return $data;
         }
 
@@ -135,7 +135,7 @@ class BaseApiController extends Controller
 
         $activeCompanyId = $this->resolveActiveCompanyId();
 
-        if ($user->isSuperAdmin()) {
+        if ($user->isSuperAdmin() || $user->isSupportIt()) {
             // Filtre optionnel via query param ou header
             $paramCompanyId = request()->input('company_id') ?: $activeCompanyId;
             if ($paramCompanyId) {

@@ -94,6 +94,15 @@ class MqttListenBiometricCommand extends Command
             $this->processOtaResponse($topic, $message);
         }, MqttClient::QOS_AT_LEAST_ONCE);
 
+        $this->mqtt->registerLoopEventHandler(function () {
+            static $lastHeartbeat = 0;
+            $now = time();
+            if ($now - $lastHeartbeat >= 30) {
+                app(\App\Services\HealthService::class)->recordListenerHeartbeat('biometric');
+                $lastHeartbeat = $now;
+            }
+        });
+
         $this->mqtt->loop(true);
     }
 

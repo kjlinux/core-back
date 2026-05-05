@@ -22,12 +22,14 @@ class BiometricDevice extends Model
         'firmware_version',
         'enrolled_count',
         'mqtt_topic',
+        'is_witness',
     ];
 
     protected $casts = [
         'is_online' => 'boolean',
         'last_sync_at' => 'datetime',
         'enrolled_count' => 'integer',
+        'is_witness' => 'boolean',
     ];
 
     public function site(): BelongsTo

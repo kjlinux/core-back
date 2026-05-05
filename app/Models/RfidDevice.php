@@ -20,11 +20,13 @@ class RfidDevice extends Model
         'last_ping_at',
         'firmware_version',
         'mqtt_topic',
+        'is_witness',
     ];
 
     protected $casts = [
         'is_online' => 'boolean',
         'last_ping_at' => 'datetime',
+        'is_witness' => 'boolean',
     ];
 
     public function site(): BelongsTo

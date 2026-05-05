@@ -19,11 +19,13 @@ class FeelbackDevice extends Model
         'is_online',
         'last_ping_at',
         'mqtt_topic',
+        'is_witness',
     ];
 
     protected $casts = [
         'is_online' => 'boolean',
         'last_ping_at' => 'datetime',
+        'is_witness' => 'boolean',
     ];
 
     public function site(): BelongsTo

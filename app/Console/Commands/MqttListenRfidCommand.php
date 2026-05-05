@@ -93,6 +93,16 @@ class MqttListenRfidCommand extends Command
             $this->processOtaResponse($topic, $message, 'rfid');
         }, MqttClient::QOS_AT_LEAST_ONCE);
 
+        // Heartbeat pour le HealthService (toutes les 30s via la boucle MQTT)
+        $this->mqtt->registerLoopEventHandler(function () {
+            static $lastHeartbeat = 0;
+            $now = time();
+            if ($now - $lastHeartbeat >= 30) {
+                app(\App\Services\HealthService::class)->recordListenerHeartbeat('rfid');
+                $lastHeartbeat = $now;
+            }
+        });
+
         $this->mqtt->loop(true);
     }
 

@@ -41,6 +41,8 @@ use App\Http\Controllers\Api\ReviewStatsController;
 use App\Http\Controllers\Api\RfidDeviceController;
 use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\SiteController;
+use App\Http\Controllers\Api\Support\HealthController as SupportHealthController;
+use App\Http\Controllers\Api\Support\SupportController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -369,4 +371,21 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Portail employe — acces a ses propres fiches (tous roles)
     Route::get('/payroll/employees/{employeeId}/payslips',            [PayrollController::class, 'myPayslips']);
+
+    // =============================================
+    // Support IT (sante systeme + monitoring capteurs + alertes)
+    // =============================================
+    Route::middleware('role:super_admin,support_it')->prefix('support')->group(function () {
+        Route::get('/health',                                         [SupportHealthController::class, 'index']);
+        Route::get('/devices/overview',                               [SupportController::class, 'overview']);
+        Route::get('/devices',                                        [SupportController::class, 'devices']);
+        Route::get('/devices/{kind}/{id}',                            [SupportController::class, 'deviceDetail']);
+        Route::post('/devices/{kind}/{id}/ping',                      [SupportController::class, 'pingDevice']);
+        Route::get('/witnesses',                                      [SupportController::class, 'listWitnesses']);
+        Route::post('/witnesses/{kind}/{id}',                         [SupportController::class, 'markWitness']);
+        Route::delete('/witnesses/{kind}/{id}',                       [SupportController::class, 'unmarkWitness']);
+        Route::get('/alerts',                                         [SupportController::class, 'alerts']);
+        Route::post('/alerts/{id}/acknowledge',                       [SupportController::class, 'acknowledgeAlert']);
+        Route::post('/alerts/{id}/resolve',                           [SupportController::class, 'resolveAlert']);
+    });
 });

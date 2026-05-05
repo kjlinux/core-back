@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\BiometricDevice;
+use App\Models\FeelbackDevice;
+use App\Models\RfidDevice;
+use App\Observers\DeviceOnlineObserver;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Support\ServiceProvider;
 
@@ -24,5 +28,9 @@ class AppServiceProvider extends ServiceProvider
             $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
             return $frontendUrl . '/reset-password?token=' . $token . '&email=' . urlencode($user->email);
         });
+
+        RfidDevice::observe(DeviceOnlineObserver::class);
+        BiometricDevice::observe(DeviceOnlineObserver::class);
+        FeelbackDevice::observe(DeviceOnlineObserver::class);
     }
 }

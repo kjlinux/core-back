@@ -84,6 +84,15 @@ class MqttListenFeelbackCommand extends Command
             $this->processMessage($topic, $message);
         }, MqttClient::QOS_AT_LEAST_ONCE);
 
+        $this->mqtt->registerLoopEventHandler(function () {
+            static $lastHeartbeat = 0;
+            $now = time();
+            if ($now - $lastHeartbeat >= 30) {
+                app(\App\Services\HealthService::class)->recordListenerHeartbeat('feelback');
+                $lastHeartbeat = $now;
+            }
+        });
+
         $this->mqtt->loop(true);
     }
 

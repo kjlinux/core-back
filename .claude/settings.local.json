@@ -6,7 +6,10 @@
       "mcp__plugin_context-mode_context-mode__ctx_execute_file",
       "mcp__plugin_context-mode_context-mode__ctx_index",
       "mcp__plugin_context-mode_context-mode__ctx_search",
-      "PowerShell(php vendor/bin/pint --dirty --format agent 2>&1)"
+      "PowerShell(php vendor/bin/pint --dirty --format agent 2>&1)",
+      "mcp__laravel-boost__last-error",
+      "mcp__laravel-boost__read-log-entries",
+      "mcp__laravel-boost__tinker"
     ]
   }
 }

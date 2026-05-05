@@ -95,4 +95,14 @@ class User extends Authenticatable
     {
         return in_array($this->role, ['super_admin', 'admin_enterprise', 'technicien']);
     }
+
+    public function isSupportIt(): bool
+    {
+        return $this->role === 'support_it';
+    }
+
+    public function hasGlobalCompanyScope(): bool
+    {
+        return in_array($this->role, ['super_admin', 'support_it']);
+    }
 }

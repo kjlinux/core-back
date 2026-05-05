@@ -21,12 +21,14 @@ class QrCode extends Model
         'is_active',
         'generated_at',
         'expires_at',
+        'is_witness',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'generated_at' => 'datetime',
         'expires_at' => 'datetime',
+        'is_witness' => 'boolean',
     ];
 
     public function site(): BelongsTo
