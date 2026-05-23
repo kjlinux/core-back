@@ -10,32 +10,77 @@ class ScheduleResolverService
     /**
      * Trouve l'horaire applicable pour un employé à un instant donné.
      *
-     * Quand plusieurs horaires sont assignés au même département, on sélectionne
-     * celui dont la plage horaire correspond à l'heure actuelle. Si aucun ne
-     * correspond à l'heure exacte, on retourne le premier trouvé comme fallback.
+     * Priorité : horaire assigné au département de l'employé, puis horaire global
+     * de l'entreprise (assigned_departments vide). work_days est respecté : un
+     * horaire dont le jour courant est absent de work_days est ignoré.
+     * Quand plusieurs candidats subsistent, on sélectionne celui dont la plage
+     * horaire contient l'heure actuelle ; sinon on retourne le premier.
      */
-    public function resolveForEmployee(string $companyId, string $departmentId, Carbon $at): ?Schedule
+    public function resolveForEmployee(string $companyId, ?string $departmentId, Carbon $at): ?Schedule
     {
-        $schedules = Schedule::where('company_id', $companyId)
-            ->whereJsonContains('assigned_departments', $departmentId)
-            ->get();
+        $dayOfWeek = $at->isoWeekday(); // 1=Lun … 7=Dim (ISO 8601)
 
-        if ($schedules->isEmpty()) {
+        // Charger une seule fois tous les horaires de la société puis filtrer en PHP
+        // (les entreprises ont rarement plus d'une vingtaine d'horaires).
+        $candidates = Schedule::where('company_id', $companyId)
+            ->get()
+            ->filter(function (Schedule $schedule) use ($departmentId, $dayOfWeek) {
+                if (! $this->isActiveOnDay($schedule, $dayOfWeek)) {
+                    return false;
+                }
+
+                $assigned = $schedule->assigned_departments ?? [];
+
+                // Horaire global (aucun département assigné) → applicable à tous
+                if (empty($assigned)) {
+                    return true;
+                }
+
+                // Horaire de département → ne s'applique que si le département correspond
+                return $departmentId !== null && in_array($departmentId, $assigned, true);
+            });
+
+        if ($candidates->isEmpty()) {
             return null;
         }
 
-        if ($schedules->count() === 1) {
-            return $schedules->first();
+        // Préférer l'horaire spécifique au département sur un horaire global
+        if ($departmentId !== null) {
+            $deptSpecific = $candidates->filter(
+                fn (Schedule $s) => ! empty($s->assigned_departments) && in_array($departmentId, $s->assigned_departments, true)
+            );
+
+            if ($deptSpecific->isNotEmpty()) {
+                $candidates = $deptSpecific;
+            }
         }
 
-        foreach ($schedules as $schedule) {
+        if ($candidates->count() === 1) {
+            return $candidates->first();
+        }
+
+        foreach ($candidates as $schedule) {
             if ($this->isWithinScheduleWindow($schedule, $at)) {
                 return $schedule;
             }
         }
 
-        // Fallback : retourner le premier horaire
-        return $schedules->first();
+        return $candidates->first();
+    }
+
+    /**
+     * Vérifie si un horaire est actif pour un jour ISO donné (1=Lun … 7=Dim).
+     * Si work_days est null ou vide, l'horaire s'applique tous les jours.
+     */
+    public function isActiveOnDay(Schedule $schedule, int $isoDay): bool
+    {
+        $workDays = $schedule->work_days;
+
+        if (empty($workDays)) {
+            return true;
+        }
+
+        return in_array($isoDay, $workDays, true);
     }
 
     /**
@@ -67,7 +112,7 @@ class ScheduleResolverService
         $tolerance = $schedule->late_tolerance ?? 0;
 
         if ($entryTime->gt($startTime->copy()->addMinutes($tolerance))) {
-            return (int) $entryTime->diffInMinutes($startTime);
+            return (int) $startTime->diffInMinutes($entryTime);
         }
 
         return 0;
