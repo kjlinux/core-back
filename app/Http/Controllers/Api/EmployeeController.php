@@ -2,15 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Requests\Employee\StoreEmployeeRequest;
+use App\Http\Requests\Employee\UpdateEmployeeRequest;
+use App\Http\Resources\EmployeeResource;
 use App\Mail\EmployeeCreatedMail;
 use App\Models\Employee;
 use App\Models\TechnicienActivityLog;
 use App\Models\User;
-use App\Http\Resources\EmployeeResource;
-use App\Http\Requests\Employee\StoreEmployeeRequest;
-use App\Http\Requests\Employee\UpdateEmployeeRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -71,30 +72,31 @@ class EmployeeController extends BaseApiController
     public function store(StoreEmployeeRequest $request): JsonResponse
     {
         $data = $this->enforceCompanyId($request->validated());
-        $employee = Employee::create($data);
-
-        // Generer un mot de passe temporaire
         $plainPassword = Str::random(12);
 
-        // Creer le compte utilisateur lie a l'employe
-        $user = User::create([
-            'name'        => $employee->first_name . ' ' . $employee->last_name,
-            'first_name'  => $employee->first_name,
-            'last_name'   => $employee->last_name,
-            'email'       => $employee->email,
-            'phone'       => $employee->phone,
-            'password'    => Hash::make($plainPassword),
-            'role'        => 'employe',
-            'company_id'  => $employee->company_id,
-            'employee_id' => $employee->id,
-            'is_active'   => true,
-        ]);
+        [$employee, $user] = DB::transaction(function () use ($data, $plainPassword) {
+            $employee = Employee::create($data);
 
-        // Envoyer l'email de bienvenue avec les identifiants
+            $user = User::create([
+                'name' => $employee->first_name.' '.$employee->last_name,
+                'first_name' => $employee->first_name,
+                'last_name' => $employee->last_name,
+                'email' => $employee->email,
+                'phone' => $employee->phone,
+                'password' => Hash::make($plainPassword),
+                'role' => 'employe',
+                'company_id' => $employee->company_id,
+                'employee_id' => $employee->id,
+                'is_active' => true,
+            ]);
+
+            return [$employee, $user];
+        });
+
         try {
             Mail::to($employee->email)->send(new EmployeeCreatedMail($employee, $user, $plainPassword));
         } catch (\Exception $e) {
-            \Log::error('EmployeeCreatedMail failed for employee ' . $employee->id . ': ' . $e->getMessage());
+            \Log::error('EmployeeCreatedMail failed for employee '.$employee->id.': '.$e->getMessage());
         }
 
         TechnicienActivityLog::record('create', 'employee', (string) $employee->id, $employee->full_name);
@@ -110,7 +112,7 @@ class EmployeeController extends BaseApiController
         $employee = Employee::findOrFail($id);
         $employee->update($request->validated());
 
-        TechnicienActivityLog::record('update', 'employee', (string) $employee->id, $employee->first_name . ' ' . $employee->last_name);
+        TechnicienActivityLog::record('update', 'employee', (string) $employee->id, $employee->first_name.' '.$employee->last_name);
 
         return $this->resourceResponse(new EmployeeResource($employee), 'Employe mis a jour avec succes');
     }
@@ -121,7 +123,7 @@ class EmployeeController extends BaseApiController
     public function destroy(string $id): JsonResponse
     {
         $employee = Employee::findOrFail($id);
-        TechnicienActivityLog::record('delete', 'employee', (string) $employee->id, $employee->first_name . ' ' . $employee->last_name);
+        TechnicienActivityLog::record('delete', 'employee', (string) $employee->id, $employee->first_name.' '.$employee->last_name);
         $employee->delete();
 
         return $this->noContentResponse();
@@ -133,13 +135,13 @@ class EmployeeController extends BaseApiController
     public function toggleActive(string $id): JsonResponse
     {
         $employee = Employee::findOrFail($id);
-        $employee->update(['is_active' => !$employee->is_active]);
+        $employee->update(['is_active' => ! $employee->is_active]);
 
         TechnicienActivityLog::record(
             $employee->is_active ? 'activate' : 'deactivate',
             'employee',
             (string) $employee->id,
-            $employee->first_name . ' ' . $employee->last_name,
+            $employee->first_name.' '.$employee->last_name,
         );
 
         return $this->resourceResponse(new EmployeeResource($employee), 'Statut de l\'employe mis a jour');

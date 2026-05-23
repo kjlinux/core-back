@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use App\Traits\HasUuid;
 use App\Traits\BelongsToCompany;
+use App\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Employee extends Model
 {
-    use HasFactory, HasUuid, BelongsToCompany;
+    use BelongsToCompany, HasFactory, HasUuid;
 
     protected $fillable = [
         'company_id',
@@ -28,9 +28,6 @@ class Employee extends Model
         'is_active',
         'hire_date',
         'biometric_enrolled',
-        'device_fingerprint',
-        'device_info',
-        'device_enrolled_at',
         'payment_mode',
         'base_salary',
     ];
@@ -39,7 +36,6 @@ class Employee extends Model
         'is_active' => 'boolean',
         'biometric_enrolled' => 'boolean',
         'hire_date' => 'date',
-        'device_enrolled_at' => 'datetime',
         'base_salary' => 'integer',
     ];
 
@@ -70,6 +66,6 @@ class Employee extends Model
 
     public function getFullNameAttribute(): string
     {
-        return $this->first_name . ' ' . $this->last_name;
+        return $this->first_name.' '.$this->last_name;
     }
 }

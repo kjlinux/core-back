@@ -9,7 +9,8 @@
       "PowerShell(php vendor/bin/pint --dirty --format agent 2>&1)",
       "mcp__laravel-boost__last-error",
       "mcp__laravel-boost__read-log-entries",
-      "mcp__laravel-boost__tinker"
+      "mcp__laravel-boost__tinker",
+      "mcp__laravel-boost__get-absolute-url"
     ]
   }
 }

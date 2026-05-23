@@ -327,11 +327,13 @@ class MqttListenBiometricCommand extends Command
         } else {
             $enrollment->update(['status' => 'failed']);
 
+            $failedEmployee = $enrollment->employee ?? Employee::find($enrollment->employee_id);
+
             BiometricAuditLog::create([
                 'user_id' => $enrollment->employee_id,
-                'user_name' => $enrollment->employee_id,
+                'user_name' => $failedEmployee ? $failedEmployee->full_name : (string) $enrollment->employee_id,
                 'action' => 'enrollment_failed',
-                'target' => $enrollment->employee_id,
+                'target' => $failedEmployee ? $failedEmployee->full_name : (string) $enrollment->employee_id,
                 'details' => 'Enrolement biometrique echoue - '.($data['error'] ?? 'Erreur inconnue'),
             ]);
 

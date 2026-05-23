@@ -57,12 +57,15 @@ class EnrollmentController extends BaseApiController
         $data = $this->enforceCompanyId($request->validated());
         $data['status'] = 'pending';
 
+        $device = BiometricDevice::findOrFail($data['device_id']);
+
+        if (! $device->is_online) {
+            return $this->errorResponse('Le terminal est hors ligne', 422);
+        }
+
         $enrollment = FingerprintEnrollment::create($data);
 
         $employee = Employee::find($enrollment->employee_id);
-        if ($employee) {
-            $employee->update(['biometric_enrolled' => true]);
-        }
 
         BiometricAuditLog::create([
             'user_id' => $request->user()->id,
