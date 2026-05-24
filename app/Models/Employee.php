@@ -36,6 +36,7 @@ class Employee extends Model
         'is_active' => 'boolean',
         'biometric_enrolled' => 'boolean',
         'hire_date' => 'date',
+        'device_enrolled_at' => 'datetime',
         'base_salary' => 'integer',
     ];
 

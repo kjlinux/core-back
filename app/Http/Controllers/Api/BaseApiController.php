@@ -70,23 +70,36 @@ class BaseApiController extends Controller
      * - technicien  : utilise X-Active-Company-Id s'il l'a sélectionné, sinon son company_id
      * - autres rôles : company_id fixe de l'utilisateur
      */
-    public function resolveActiveCompanyIdPublic(): ?string { return $this->resolveActiveCompanyId(); }
+    public function resolveActiveCompanyIdPublic(): ?string
+    {
+        return $this->resolveActiveCompanyId();
+    }
 
     protected function resolveActiveCompanyId(): ?string
     {
         $user = auth()->user();
-        if (!$user) return null;
+        if (! $user) {
+            return null;
+        }
 
         // Company id passed as query param ?_company_id (header was blocked by CORS on some proxies)
         $activeCompanyId = request()->input('_company_id');
 
-        \Log::info('[resolveActiveCompanyId]', [
-            'user_id'          => $user->id,
-            'role'             => $user->role,
-            'user_company_id'  => $user->company_id,
-            '_company_id_param'=> $activeCompanyId,
-            'all_params'       => request()->query(),
-        ]);
+        // Log de diagnostic — declare au niveau debug (ne s'affiche qu'avec LOG_LEVEL=debug)
+        // pour eviter de spammer la prod et de logger des params eventuellement sensibles.
+        if (config('app.debug')) {
+            $params = collect(request()->query())
+                ->except(['password', 'current_password', 'new_password', 'new_password_confirmation', 'token', 'access_token', 'refresh_token'])
+                ->toArray();
+
+            \Log::debug('[resolveActiveCompanyId]', [
+                'user_id' => $user->id,
+                'role' => $user->role,
+                'user_company_id' => $user->company_id,
+                '_company_id_param' => $activeCompanyId,
+                'all_params' => $params,
+            ]);
+        }
 
         if ($user->isSuperAdmin() || $user->isSupportIt()) {
             return $activeCompanyId ?: null;
@@ -94,9 +107,10 @@ class BaseApiController extends Controller
 
         if ($user->isTechnicien()) {
             $resolved = $activeCompanyId ?: $user->company_id;
-            if (!$resolved) {
+            if (! $resolved) {
                 abort(403, 'Technicien: aucune entreprise active selectionnee.');
             }
+
             return $resolved;
         }
 
@@ -109,7 +123,9 @@ class BaseApiController extends Controller
     protected function enforceCompanyId(array $data): array
     {
         $user = auth()->user();
-        if (!$user) return $data;
+        if (! $user) {
+            return $data;
+        }
 
         if ($user->isSuperAdmin() || $user->isSupportIt()) {
             // super_admin / support_it peuvent explicitement passer un company_id
@@ -131,7 +147,9 @@ class BaseApiController extends Controller
     protected function scopeByCompany($query, string $companyIdColumn = 'company_id'): void
     {
         $user = auth()->user();
-        if (!$user) return;
+        if (! $user) {
+            return;
+        }
 
         $activeCompanyId = $this->resolveActiveCompanyId();
 

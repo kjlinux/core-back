@@ -1,13 +1,6 @@
 <?php
 
-use App\Http\Controllers\Api\PayrollController;
 use App\Http\Controllers\Api\AdminOrderController;
-use App\Http\Controllers\Api\TechnicienActivityController;
-use App\Http\Controllers\Api\QrCodeController;
-use App\Http\Controllers\Api\QrAttendanceController;
-use App\Http\Controllers\Api\EmployeeDeviceController;
-use App\Http\Controllers\Api\EnrollSessionController;
-use App\Http\Controllers\Api\FirmwareController;
 use App\Http\Controllers\Api\AdminSalesReportController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AttendanceReportController;
@@ -20,21 +13,27 @@ use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\EmployeeController;
+use App\Http\Controllers\Api\EmployeeDeviceController;
 use App\Http\Controllers\Api\EnrollmentController;
+use App\Http\Controllers\Api\EnrollSessionController;
 use App\Http\Controllers\Api\FeelbackAlertController;
 use App\Http\Controllers\Api\FeelbackDeviceController;
 use App\Http\Controllers\Api\FeelbackEntryController;
 use App\Http\Controllers\Api\FeelbackReportController;
 use App\Http\Controllers\Api\FeelbackStatsController;
+use App\Http\Controllers\Api\FirmwareController;
 use App\Http\Controllers\Api\ForgotPasswordController;
 use App\Http\Controllers\Api\HolidayController;
 use App\Http\Controllers\Api\MqttController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PaymentCallbackController;
+use App\Http\Controllers\Api\PayrollController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\PublicReviewController;
+use App\Http\Controllers\Api\QrAttendanceController;
+use App\Http\Controllers\Api\QrCodeController;
 use App\Http\Controllers\Api\ResetPasswordController;
 use App\Http\Controllers\Api\ReviewConfigController;
 use App\Http\Controllers\Api\ReviewStatsController;
@@ -43,6 +42,7 @@ use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\SiteController;
 use App\Http\Controllers\Api\Support\HealthController as SupportHealthController;
 use App\Http\Controllers\Api\Support\SupportController;
+use App\Http\Controllers\Api\TechnicienActivityController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -52,13 +52,14 @@ Route::get('/firmware/version.json', [FirmwareController::class, 'latestVersion'
 // Public routes (sans auth)
 Route::prefix('public')->group(function () {
     Route::get('/review/{token}', [PublicReviewController::class, 'show']);
-    Route::post('/review/{token}/submit', [PublicReviewController::class, 'submit']);
+    Route::post('/review/{token}/submit', [PublicReviewController::class, 'submit'])
+        ->middleware('throttle:10,1');
 });
 
-Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 Route::post('/auth/logout', [AuthController::class, 'logout']);
-Route::post('/auth/forgot-password', ForgotPasswordController::class);
-Route::post('/auth/reset-password', ResetPasswordController::class);
+Route::post('/auth/forgot-password', ForgotPasswordController::class)->middleware('throttle:5,1');
+Route::post('/auth/reset-password', ResetPasswordController::class)->middleware('throttle:5,1');
 Route::post('/payment/callback', [PaymentCallbackController::class, 'handle']);
 
 // Routes publiques QR — utilisées par les employés sans compte (téléphone mobile)
@@ -355,37 +356,37 @@ Route::middleware('auth:sanctum')->group(function () {
     // =============================================
     Route::middleware('role:super_admin,admin_enterprise')->group(function () {
         // Configuration
-        Route::get('/payroll/config/{companyId}',                     [PayrollController::class, 'getConfig']);
-        Route::put('/payroll/config/{companyId}',                     [PayrollController::class, 'saveConfig']);
-        Route::put('/payroll/config/{companyId}/lateness-rules',      [PayrollController::class, 'saveLatenessRules']);
+        Route::get('/payroll/config/{companyId}', [PayrollController::class, 'getConfig']);
+        Route::put('/payroll/config/{companyId}', [PayrollController::class, 'saveConfig']);
+        Route::put('/payroll/config/{companyId}/lateness-rules', [PayrollController::class, 'saveLatenessRules']);
 
         // Generation
-        Route::post('/payroll/generate',                              [PayrollController::class, 'generate']);
+        Route::post('/payroll/generate', [PayrollController::class, 'generate']);
 
         // Fiches — liste + detail + validation + export
-        Route::get('/payroll/payslips',                               [PayrollController::class, 'index']);
-        Route::get('/payroll/payslips/{id}',                          [PayrollController::class, 'show']);
-        Route::patch('/payroll/payslips/{id}/validate',               [PayrollController::class, 'validate']);
+        Route::get('/payroll/payslips', [PayrollController::class, 'index']);
+        Route::get('/payroll/payslips/{id}', [PayrollController::class, 'show']);
+        Route::patch('/payroll/payslips/{id}/validate', [PayrollController::class, 'validate']);
         // PDF genere cote frontend (jsPDF) — pas d'endpoint necessaire
     });
 
     // Portail employe — acces a ses propres fiches (tous roles)
-    Route::get('/payroll/employees/{employeeId}/payslips',            [PayrollController::class, 'myPayslips']);
+    Route::get('/payroll/employees/{employeeId}/payslips', [PayrollController::class, 'myPayslips']);
 
     // =============================================
     // Support IT (sante systeme + monitoring capteurs + alertes)
     // =============================================
     Route::middleware('role:super_admin,support_it')->prefix('support')->group(function () {
-        Route::get('/health',                                         [SupportHealthController::class, 'index']);
-        Route::get('/devices/overview',                               [SupportController::class, 'overview']);
-        Route::get('/devices',                                        [SupportController::class, 'devices']);
-        Route::get('/devices/{kind}/{id}',                            [SupportController::class, 'deviceDetail']);
-        Route::post('/devices/{kind}/{id}/ping',                      [SupportController::class, 'pingDevice']);
-        Route::get('/witnesses',                                      [SupportController::class, 'listWitnesses']);
-        Route::post('/witnesses/{kind}/{id}',                         [SupportController::class, 'markWitness']);
-        Route::delete('/witnesses/{kind}/{id}',                       [SupportController::class, 'unmarkWitness']);
-        Route::get('/alerts',                                         [SupportController::class, 'alerts']);
-        Route::post('/alerts/{id}/acknowledge',                       [SupportController::class, 'acknowledgeAlert']);
-        Route::post('/alerts/{id}/resolve',                           [SupportController::class, 'resolveAlert']);
+        Route::get('/health', [SupportHealthController::class, 'index']);
+        Route::get('/devices/overview', [SupportController::class, 'overview']);
+        Route::get('/devices', [SupportController::class, 'devices']);
+        Route::get('/devices/{kind}/{id}', [SupportController::class, 'deviceDetail']);
+        Route::post('/devices/{kind}/{id}/ping', [SupportController::class, 'pingDevice']);
+        Route::get('/witnesses', [SupportController::class, 'listWitnesses']);
+        Route::post('/witnesses/{kind}/{id}', [SupportController::class, 'markWitness']);
+        Route::delete('/witnesses/{kind}/{id}', [SupportController::class, 'unmarkWitness']);
+        Route::get('/alerts', [SupportController::class, 'alerts']);
+        Route::post('/alerts/{id}/acknowledge', [SupportController::class, 'acknowledgeAlert']);
+        Route::post('/alerts/{id}/resolve', [SupportController::class, 'resolveAlert']);
     });
 });

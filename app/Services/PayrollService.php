@@ -4,9 +4,8 @@ namespace App\Services;
 
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
-use App\Models\LatenessRule;
-use App\Models\Payslip;
 use App\Models\PayrollConfig;
+use App\Models\Payslip;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -25,8 +24,8 @@ class PayrollService
         ?string $siteId = null,
         ?string $departmentId = null,
     ): Collection {
-        $start  = Carbon::parse($periodStart);
-        $end    = Carbon::parse($periodEnd);
+        $start = Carbon::parse($periodStart);
+        $end = Carbon::parse($periodEnd);
         $period = $start->format('Y-m');
 
         // Charger la config de paie de l'entreprise
@@ -65,22 +64,23 @@ class PayrollService
         string $period,
     ): Payslip {
         $paymentMode = $employee->payment_mode ?? $config?->default_payment_mode ?? 'monthly';
-        $baseSalary  = $employee->base_salary ?? 0;
+        $baseSalary = $employee->base_salary ?? 0;
         $workingDays = $config?->working_days_per_month ?? 26;
-        $dailyHours  = $config?->standard_daily_hours ?? 8;
+        $dailyHours = $config?->standard_daily_hours ?? 8;
 
         // Charger les presences de la periode
         $records = AttendanceRecord::where('employee_id', $employee->id)
-            ->whereBetween('check_in', [$start->startOfDay(), $end->endOfDay()])
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
             ->get();
 
         // Calcul des jours et heures travailles
-        $workedDays   = $records->count();
-        $workedHours  = $records->sum(function ($r) {
-            if (!$r->check_in || !$r->check_out) {
+        $workedDays = $records->count();
+        $workedHours = $records->sum(function ($r) {
+            if (! $r->entry_time || ! $r->exit_time) {
                 return 0;
             }
-            return Carbon::parse($r->check_in)->diffInMinutes(Carbon::parse($r->check_out)) / 60;
+
+            return Carbon::parse($r->entry_time)->diffInMinutes(Carbon::parse($r->exit_time)) / 60;
         });
 
         // Calcul des absences (jours ouvrables - jours pointes)
@@ -88,34 +88,34 @@ class PayrollService
 
         // Calcul des retards en minutes
         $totalLatenessMinutes = $records->sum(function ($r) {
-            return max(0, $r->lateness_minutes ?? 0);
+            return max(0, (int) ($r->late_minutes ?? 0));
         });
 
         // Calcul du salaire brut selon le mode
         $grossAmount = match ($paymentMode) {
-            'monthly'   => $baseSalary,
-            'daily'     => $baseSalary * $workedDays,
-            'hourly'    => (int) round($baseSalary * $workedHours),
-            'weekly'    => (int) round($baseSalary * ($workedDays / 5)),
-            'forfait'   => $baseSalary,
-            default     => $baseSalary,
+            'monthly' => $baseSalary,
+            'daily' => $baseSalary * $workedDays,
+            'hourly' => (int) round($baseSalary * $workedHours),
+            'weekly' => (int) round($baseSalary * ($workedDays / 5)),
+            'forfait' => $baseSalary,
+            default => $baseSalary,
         };
 
         // Heures supplementaires
-        $overtimeHours  = 0.0;
+        $overtimeHours = 0.0;
         $overtimeAmount = 0;
         if ($config?->overtime_enabled && $paymentMode === 'hourly') {
-            $standardHours   = $workingDays * $dailyHours;
-            $overtimeHours   = max(0, $workedHours - $standardHours);
-            $hourlyRate      = $baseSalary;
-            $overtimeAmount  = (int) round($overtimeHours * $hourlyRate * ($config->overtime_rate - 1));
-            $grossAmount    += $overtimeAmount;
+            $standardHours = $workingDays * $dailyHours;
+            $overtimeHours = max(0, $workedHours - $standardHours);
+            $hourlyRate = $baseSalary;
+            $overtimeAmount = (int) round($overtimeHours * $hourlyRate * ($config->overtime_rate - 1));
+            $grossAmount += $overtimeAmount;
         }
 
         // Deduction absences (prorata jours ouvrables)
         $absenceDeduction = 0;
         if ($baseSalary > 0 && $workingDays > 0) {
-            $dailySalary      = $baseSalary / $workingDays;
+            $dailySalary = $baseSalary / $workingDays;
             $absenceDeduction = (int) round($dailySalary * $absentDays);
         }
 
@@ -137,26 +137,26 @@ class PayrollService
         $payslip = Payslip::updateOrCreate(
             ['employee_id' => $employee->id, 'period' => $period],
             [
-                'company_id'             => $employee->company_id,
-                'site_id'                => $employee->site_id,
-                'department_id'          => $employee->department_id,
-                'period_start'           => $start->toDateString(),
-                'period_end'             => $end->toDateString(),
-                'payment_mode'           => $paymentMode,
-                'base_salary'            => $baseSalary,
-                'worked_days'            => $workedDays,
-                'worked_hours'           => round($workedHours, 2),
-                'absent_days'            => $absentDays,
+                'company_id' => $employee->company_id,
+                'site_id' => $employee->site_id,
+                'department_id' => $employee->department_id,
+                'period_start' => $start->toDateString(),
+                'period_end' => $end->toDateString(),
+                'payment_mode' => $paymentMode,
+                'base_salary' => $baseSalary,
+                'worked_days' => $workedDays,
+                'worked_hours' => round($workedHours, 2),
+                'absent_days' => $absentDays,
                 'total_lateness_minutes' => $totalLatenessMinutes,
-                'overtime_hours'         => round($overtimeHours, 2),
-                'overtime_amount'        => $overtimeAmount,
-                'lateness_deduction'     => $latenessDeduction,
-                'absence_deduction'      => $absenceDeduction,
-                'lines'                  => [],
-                'gross_amount'           => $grossAmount,
-                'net_amount'             => $netAmount,
-                'status'                 => 'draft',
-                'generated_at'           => now(),
+                'overtime_hours' => round($overtimeHours, 2),
+                'overtime_amount' => $overtimeAmount,
+                'lateness_deduction' => $latenessDeduction,
+                'absence_deduction' => $absenceDeduction,
+                'lines' => [],
+                'gross_amount' => $grossAmount,
+                'net_amount' => $netAmount,
+                'status' => 'draft',
+                'generated_at' => now(),
             ]
         );
 
@@ -176,8 +176,8 @@ class PayrollService
         int $dailyHours,
         Collection $rules,
     ): int {
-        $deduction    = 0;
-        $hourlyRate   = $workingDays > 0 && $dailyHours > 0
+        $deduction = 0;
+        $hourlyRate = $workingDays > 0 && $dailyHours > 0
             ? $baseSalary / ($workingDays * $dailyHours)
             : 0;
 
@@ -202,7 +202,7 @@ class PayrollService
             } else {
                 // percentage du salaire journalier
                 $dailySalary = $workingDays > 0 ? $baseSalary / $workingDays : 0;
-                $deduction  += (int) round($dailySalary * ($rule->penalty_value / 100) * $multiplier);
+                $deduction += (int) round($dailySalary * ($rule->penalty_value / 100) * $multiplier);
             }
         }
 

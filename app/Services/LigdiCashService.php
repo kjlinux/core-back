@@ -8,14 +8,22 @@ use Illuminate\Support\Facades\Log;
 class LigdiCashService
 {
     protected string $baseUrl;
+
     protected string $apiKey;
+
     protected string $apiSecret;
 
     public function __construct()
     {
-        $this->baseUrl = config('ligdicash.base_url');
-        $this->apiKey = config('ligdicash.api_key');
-        $this->apiSecret = config('ligdicash.api_secret');
+        $this->baseUrl = config('ligdicash.base_url') ?? '';
+        $this->apiKey = config('ligdicash.api_key') ?? '';
+        $this->apiSecret = config('ligdicash.api_secret') ?? '';
+
+        // Echec rapide en boot si la config est incomplete : evite de tomber
+        // silencieusement plus tard avec une 500 cryptique au moment de payer.
+        if ($this->baseUrl === '' || $this->apiKey === '' || $this->apiSecret === '') {
+            Log::error('LigdiCash: configuration incomplete (base_url, api_key, api_secret requis)');
+        }
     }
 
     public function createPayment(array $data): array
@@ -62,10 +70,10 @@ class LigdiCashService
 
         $response = Http::withHeaders([
             'Apikey' => $this->apiKey,
-            'Authorization' => 'Bearer ' . $this->apiSecret,
+            'Authorization' => 'Bearer '.$this->apiSecret,
             'Accept' => 'application/json',
             'Content-Type' => 'application/json',
-        ])->post($this->baseUrl . '/redirect/checkout-invoice/create', $payload);
+        ])->post($this->baseUrl.'/redirect/checkout-invoice/create', $payload);
 
         if ($response->successful()) {
             $body = $response->json();
@@ -80,6 +88,7 @@ class LigdiCashService
                 'response_code' => $body['response_code'] ?? null,
                 'response_text' => $body['response_text'] ?? null,
             ]);
+
             return [
                 'success' => false,
                 'message' => $body['response_text'] ?? 'Echec de creation du paiement',
@@ -101,9 +110,9 @@ class LigdiCashService
     {
         $response = Http::withHeaders([
             'Apikey' => $this->apiKey,
-            'Authorization' => 'Bearer ' . $this->apiSecret,
+            'Authorization' => 'Bearer '.$this->apiSecret,
             'Accept' => 'application/json',
-        ])->get($this->baseUrl . '/redirect/checkout-invoice/confirm/', [
+        ])->get($this->baseUrl.'/redirect/checkout-invoice/confirm/', [
             'invoiceToken' => $token,
         ]);
 
@@ -114,8 +123,31 @@ class LigdiCashService
         return ['status' => 'unknown'];
     }
 
-    public function verifyCallback(array $data): bool
+    /**
+     * Verifie la coherence minimale du payload de callback.
+     * Si une signature HMAC est configuree (ligdicash.hmac_header / ligdicash.api_secret),
+     * elle est verifiee contre le corps brut. Sinon on retombe sur la verification
+     * de presence des champs critiques.
+     *
+     * @param  array<string,mixed>  $data
+     */
+    public function verifyCallback(array $data, ?string $rawBody = null, ?string $signatureHeader = null): bool
     {
-        return !empty($data['token']) && !empty($data['status']);
+        if (empty($data['token']) || empty($data['status'])) {
+            return false;
+        }
+
+        if ($rawBody !== null && $signatureHeader !== null && $this->apiSecret !== '') {
+            $expected = hash_hmac('sha256', $rawBody, $this->apiSecret);
+            if (! hash_equals($expected, $signatureHeader)) {
+                Log::warning('LigdiCash callback signature mismatch', [
+                    'expected_prefix' => substr($expected, 0, 8),
+                ]);
+
+                return false;
+            }
+        }
+
+        return true;
     }
 }

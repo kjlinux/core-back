@@ -9,8 +9,8 @@ use App\Http\Resources\LatenessRuleResource;
 use App\Http\Resources\PayrollConfigResource;
 use App\Http\Resources\PayslipResource;
 use App\Models\LatenessRule;
-use App\Models\Payslip;
 use App\Models\PayrollConfig;
+use App\Models\Payslip;
 use App\Services\PayrollService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -33,13 +33,13 @@ class PayrollController extends BaseApiController
             ->firstOrCreate(
                 ['company_id' => $companyId],
                 [
-                    'default_payment_mode'      => 'monthly',
-                    'standard_daily_hours'       => 8,
-                    'working_days_per_month'     => 26,
-                    'payment_day'                => 28,
+                    'default_payment_mode' => 'monthly',
+                    'standard_daily_hours' => 8,
+                    'working_days_per_month' => 26,
+                    'payment_day' => 28,
                     'lateness_deduction_enabled' => true,
-                    'overtime_enabled'           => false,
-                    'overtime_rate'              => 1.25,
+                    'overtime_enabled' => false,
+                    'overtime_rate' => 1.25,
                 ]
             );
 
@@ -72,12 +72,12 @@ class PayrollController extends BaseApiController
 
         $rules = collect($request->input('rules'))->map(function ($rule) use ($companyId) {
             return LatenessRule::create([
-                'company_id'        => $companyId,
+                'company_id' => $companyId,
                 'tolerance_minutes' => $rule['tolerance_minutes'],
                 'minutes_threshold' => $rule['minutes_threshold'],
-                'penalty_value'     => $rule['penalty_value'],
-                'penalty_type'      => $rule['penalty_type'],
-                'apply_per'         => $rule['apply_per'],
+                'penalty_value' => $rule['penalty_value'],
+                'penalty_type' => $rule['penalty_type'],
+                'apply_per' => $rule['apply_per'],
             ]);
         });
 
@@ -98,16 +98,16 @@ class PayrollController extends BaseApiController
     public function generate(GeneratePayslipsRequest $request): JsonResponse
     {
         $payslips = $this->payrollService->generatePayslips(
-            companyId:    $request->input('company_id'),
-            periodStart:  $request->input('period_start'),
-            periodEnd:    $request->input('period_end'),
-            siteId:       $request->input('site_id'),
+            companyId: $request->input('company_id'),
+            periodStart: $request->input('period_start'),
+            periodEnd: $request->input('period_end'),
+            siteId: $request->input('site_id'),
             departmentId: $request->input('department_id'),
         );
 
         return $this->successResponse(
             PayslipResource::collection($payslips),
-            $payslips->count() . ' fiche(s) de paie generee(s)'
+            $payslips->count().' fiche(s) de paie generee(s)'
         );
     }
 
@@ -124,11 +124,11 @@ class PayrollController extends BaseApiController
         $query = Payslip::with(['employee', 'company', 'site', 'department']);
         $this->scopeByCompany($query);
 
-        $query->when($request->input('site_id'),       fn ($q, $v) => $q->where('site_id', $v));
+        $query->when($request->input('site_id'), fn ($q, $v) => $q->where('site_id', $v));
         $query->when($request->input('department_id'), fn ($q, $v) => $q->where('department_id', $v));
-        $query->when($request->input('employee_id'),   fn ($q, $v) => $q->where('employee_id', $v));
-        $query->when($request->input('period'),        fn ($q, $v) => $q->where('period', $v));
-        $query->when($request->input('status'),        fn ($q, $v) => $q->where('status', $v));
+        $query->when($request->input('employee_id'), fn ($q, $v) => $q->where('employee_id', $v));
+        $query->when($request->input('period'), fn ($q, $v) => $q->where('period', $v));
+        $query->when($request->input('status'), fn ($q, $v) => $q->where('status', $v));
 
         $payslips = $query->orderByDesc('period')->get();
 
@@ -158,7 +158,6 @@ class PayrollController extends BaseApiController
         return $this->resourceResponse(new PayslipResource($payslip), 'Fiche de paie validee');
     }
 
-
     // =========================================================================
     // PORTAIL EMPLOYE
     // =========================================================================
@@ -166,9 +165,22 @@ class PayrollController extends BaseApiController
     /**
      * GET /payroll/employees/{employeeId}/payslips
      * Retourne les fiches de paie d'un employe specifique.
+     * Un employe ne peut acceder qu'a ses propres fiches.
      */
-    public function myPayslips(string $employeeId): JsonResponse
+    public function myPayslips(Request $request, string $employeeId): JsonResponse
     {
+        $user = $request->user();
+
+        $isPrivileged = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        $isPrivileged = $isPrivileged
+            || $user->role === 'super_admin'
+            || $user->role === 'admin_enterprise';
+
+        if (! $isPrivileged) {
+            $ownEmployeeId = (string) ($user->employee_id ?? '');
+            abort_if($ownEmployeeId === '' || $ownEmployeeId !== (string) $employeeId, 403, 'Acces interdit a ces fiches de paie');
+        }
+
         $payslips = Payslip::with(['employee', 'company', 'site', 'department'])
             ->where('employee_id', $employeeId)
             ->orderByDesc('period')

@@ -16,7 +16,6 @@ use App\Models\OrderItem;
 use App\Models\RfidCard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class DashboardController extends BaseApiController
 {
@@ -32,20 +31,20 @@ class DashboardController extends BaseApiController
 
         $bioDeviceQuery = BiometricDevice::where('is_online', true);
         $feelbackDeviceQuery = FeelbackDevice::where('is_online', true);
-        if (!$isSuperAdmin) {
+        if (! $isSuperAdmin) {
             $bioDeviceQuery->where('company_id', $companyId);
             $feelbackDeviceQuery->where('company_id', $companyId);
         }
         $connectedDevices = $bioDeviceQuery->count() + $feelbackDeviceQuery->count();
 
         $employeeQuery = Employee::query();
-        if (!$isSuperAdmin) {
+        if (! $isSuperAdmin) {
             $employeeQuery->where('company_id', $companyId);
         }
         $totalEmployees = $employeeQuery->count();
 
         $entryQuery = FeelbackEntry::query();
-        if (!$isSuperAdmin) {
+        if (! $isSuperAdmin) {
             $entryQuery->whereHas('site', fn ($q) => $q->where('company_id', $companyId));
         }
         $totalEntries = (clone $entryQuery)->count();
@@ -55,7 +54,7 @@ class DashboardController extends BaseApiController
             : 0;
 
         $orderQuery = Order::query();
-        if (!$isSuperAdmin) {
+        if (! $isSuperAdmin) {
             $orderQuery->where('company_id', $companyId);
         }
         $rfidCardsSold = $isSuperAdmin
@@ -65,7 +64,7 @@ class DashboardController extends BaseApiController
         $marketplaceRevenue = (clone $orderQuery)->where('payment_status', 'paid')->sum('total');
 
         $alertQuery = FeelbackAlert::where('is_read', false);
-        if (!$isSuperAdmin) {
+        if (! $isSuperAdmin) {
             $alertQuery->whereHas('site', fn ($q) => $q->where('company_id', $companyId));
         }
         $technicalAlerts = $alertQuery->count();
@@ -73,12 +72,12 @@ class DashboardController extends BaseApiController
         // Attendance today
         $today = now()->toDateString();
         $attendanceQuery = AttendanceRecord::where('date', $today);
-        if (!$isSuperAdmin) {
+        if (! $isSuperAdmin) {
             $attendanceQuery->whereHas('employee', fn ($q) => $q->where('company_id', $companyId));
         }
         $presentToday = (clone $attendanceQuery)->where('status', 'present')->count();
-        $lateToday    = (clone $attendanceQuery)->where('status', 'late')->count();
-        $absentToday  = (clone $attendanceQuery)->where('status', 'absent')->count();
+        $lateToday = (clone $attendanceQuery)->where('status', 'late')->count();
+        $absentToday = (clone $attendanceQuery)->where('status', 'absent')->count();
 
         $totalForRate = $presentToday + $lateToday + $absentToday;
         $attendanceRate = $totalForRate > 0
@@ -87,42 +86,42 @@ class DashboardController extends BaseApiController
 
         // Orders
         $orderQuery = Order::query();
-        if (!$isSuperAdmin) {
+        if (! $isSuperAdmin) {
             $orderQuery->where('company_id', $companyId);
         }
-        $totalOrders   = (clone $orderQuery)->count();
+        $totalOrders = (clone $orderQuery)->count();
         $pendingOrders = (clone $orderQuery)->where('status', 'pending')->count();
 
         // Biometric enrollments
         $enrollQuery = FingerprintEnrollment::where('status', 'enrolled');
-        if (!$isSuperAdmin) {
+        if (! $isSuperAdmin) {
             $enrollQuery->whereHas('employee', fn ($q) => $q->where('company_id', $companyId));
         }
         $biometricEnrolled = $enrollQuery->count();
 
         // Active RFID cards
         $cardQuery = RfidCard::where('status', 'active');
-        if (!$isSuperAdmin) {
+        if (! $isSuperAdmin) {
             $cardQuery->where('company_id', $companyId);
         }
         $activeCards = $cardQuery->count();
 
         return $this->successResponse([
-            'activeCompanies'       => $activeCompanies,
-            'connectedDevices'      => $connectedDevices,
-            'totalEmployees'        => $totalEmployees,
+            'activeCompanies' => $activeCompanies,
+            'connectedDevices' => $connectedDevices,
+            'totalEmployees' => $totalEmployees,
             'globalSatisfactionRate' => $globalSatisfactionRate,
-            'rfidCardsSold'         => $rfidCardsSold,
-            'marketplaceRevenue'    => $marketplaceRevenue,
-            'technicalAlerts'       => $technicalAlerts,
-            'presentToday'          => $presentToday,
-            'absentToday'           => $absentToday,
-            'lateToday'             => $lateToday,
-            'attendanceRate'        => $attendanceRate,
-            'totalOrders'           => $totalOrders,
-            'pendingOrders'         => $pendingOrders,
-            'biometricEnrolled'     => $biometricEnrolled,
-            'activeCards'           => $activeCards,
+            'rfidCardsSold' => $rfidCardsSold,
+            'marketplaceRevenue' => $marketplaceRevenue,
+            'technicalAlerts' => $technicalAlerts,
+            'presentToday' => $presentToday,
+            'absentToday' => $absentToday,
+            'lateToday' => $lateToday,
+            'attendanceRate' => $attendanceRate,
+            'totalOrders' => $totalOrders,
+            'pendingOrders' => $pendingOrders,
+            'biometricEnrolled' => $biometricEnrolled,
+            'activeCards' => $activeCards,
         ]);
     }
 
@@ -153,28 +152,34 @@ class DashboardController extends BaseApiController
 
         // Employees trend
         $empQuery = Employee::query();
-        if (!$isSuperAdmin) $empQuery->where('company_id', $companyId);
+        if (! $isSuperAdmin) {
+            $empQuery->where('company_id', $companyId);
+        }
         $currentEmployees = (clone $empQuery)->where('created_at', '>=', $currentStart)->count();
         $previousEmployees = (clone $empQuery)->whereBetween('created_at', [$previousStart, $previousEnd])->count();
         $trends[] = $this->buildTrend('Employes', $currentEmployees, $previousEmployees);
 
         // Orders trend
         $orderQuery = Order::query();
-        if (!$isSuperAdmin) $orderQuery->where('company_id', $companyId);
+        if (! $isSuperAdmin) {
+            $orderQuery->where('company_id', $companyId);
+        }
         $currentOrders = (clone $orderQuery)->where('created_at', '>=', $currentStart)->count();
         $previousOrders = (clone $orderQuery)->whereBetween('created_at', [$previousStart, $previousEnd])->count();
         $trends[] = $this->buildTrend('Commandes', $currentOrders, $previousOrders);
 
         // Revenue trend
         $revQuery = Order::where('payment_status', 'paid');
-        if (!$isSuperAdmin) $revQuery->where('company_id', $companyId);
+        if (! $isSuperAdmin) {
+            $revQuery->where('company_id', $companyId);
+        }
         $currentRevenue = (clone $revQuery)->where('created_at', '>=', $currentStart)->sum('total');
         $previousRevenue = (clone $revQuery)->whereBetween('created_at', [$previousStart, $previousEnd])->sum('total');
         $trends[] = $this->buildTrend('Revenus', $currentRevenue, $previousRevenue);
 
         // Satisfaction trend
         $entryBase = FeelbackEntry::query();
-        if (!$isSuperAdmin) {
+        if (! $isSuperAdmin) {
             $entryBase->whereHas('site', fn ($q) => $q->where('company_id', $companyId));
         }
         $currentTotal = (clone $entryBase)->where('created_at', '>=', $currentStart)->count();
@@ -193,7 +198,7 @@ class DashboardController extends BaseApiController
 
         // Alerts trend
         $alertBase = FeelbackAlert::query();
-        if (!$isSuperAdmin) {
+        if (! $isSuperAdmin) {
             $alertBase->whereHas('site', fn ($q) => $q->where('company_id', $companyId));
         }
         $currentAlerts = (clone $alertBase)->where('created_at', '>=', $currentStart)->count();
@@ -215,7 +220,7 @@ class DashboardController extends BaseApiController
             $date = now()->subDays($i)->toDateString();
             $label = now()->subDays($i)->locale('fr')->isoFormat('ddd D');
             $q = AttendanceRecord::where('date', $date)->whereIn('status', ['present', 'late']);
-            if (!$isSuperAdmin) {
+            if (! $isSuperAdmin) {
                 $q->whereHas('employee', fn ($sq) => $sq->where('company_id', $companyId));
             }
             $attendanceTrend[] = ['label' => $label, 'value' => $q->count()];
@@ -227,30 +232,37 @@ class DashboardController extends BaseApiController
             $date = now()->subDays($i)->toDateString();
             $label = now()->subDays($i)->locale('fr')->isoFormat('ddd D');
             $q = FeelbackEntry::whereDate('created_at', $date);
-            if (!$isSuperAdmin) {
+            if (! $isSuperAdmin) {
                 $q->whereHas('site', fn ($sq) => $sq->where('company_id', $companyId));
             }
             $total = (clone $q)->count();
-            $bon   = (clone $q)->where('level', 'bon')->count();
-            $rate  = $total > 0 ? round(($bon / $total) * 100, 1) : 0;
+            $bon = (clone $q)->where('level', 'bon')->count();
+            $rate = $total > 0 ? round(($bon / $total) * 100, 1) : 0;
             $satisfactionTrend[] = ['label' => $label, 'value' => $rate];
         }
 
-        // Attendance by department — today
+        // Attendance by department — today (une seule requete groupee, evite le N+1)
         $today = now()->toDateString();
         $deptQuery = Department::query();
-        if (!$isSuperAdmin) {
+        if (! $isSuperAdmin) {
             $deptQuery->where('company_id', $companyId);
         }
-        $departments = $deptQuery->with(['employees'])->get();
-        $attendanceByDepartment = $departments->map(function ($dept) use ($today) {
-            $employeeIds = $dept->employees->pluck('id');
-            $count = AttendanceRecord::where('date', $today)
-                ->whereIn('employee_id', $employeeIds)
-                ->whereIn('status', ['present', 'late'])
-                ->count();
-            return ['label' => $dept->name, 'value' => $count];
-        })->filter(fn ($d) => $d['value'] > 0)->values()->toArray();
+        $departments = $deptQuery->get(['id', 'name']);
+
+        $countsByDept = AttendanceRecord::query()
+            ->join('employees', 'attendance_records.employee_id', '=', 'employees.id')
+            ->where('attendance_records.date', $today)
+            ->whereIn('attendance_records.status', ['present', 'late'])
+            ->whereIn('employees.department_id', $departments->pluck('id'))
+            ->groupBy('employees.department_id')
+            ->selectRaw('employees.department_id as dept_id, COUNT(*) as total')
+            ->pluck('total', 'dept_id');
+
+        $attendanceByDepartment = $departments
+            ->map(fn ($d) => ['label' => $d->name, 'value' => (int) ($countsByDept[$d->id] ?? 0)])
+            ->filter(fn ($d) => $d['value'] > 0)
+            ->values()
+            ->toArray();
 
         // Revenue monthly — last 6 months (super admin only)
         $revenueMonthly = [];
@@ -277,11 +289,11 @@ class DashboardController extends BaseApiController
         }
 
         return $this->successResponse([
-            'attendanceTrend'       => $attendanceTrend,
-            'satisfactionTrend'     => $satisfactionTrend,
+            'attendanceTrend' => $attendanceTrend,
+            'satisfactionTrend' => $satisfactionTrend,
             'attendanceByDepartment' => $attendanceByDepartment,
-            'revenueMonthly'        => $revenueMonthly,
-            'companiesByModule'     => $companiesByModule,
+            'revenueMonthly' => $revenueMonthly,
+            'companiesByModule' => $companiesByModule,
         ]);
     }
 

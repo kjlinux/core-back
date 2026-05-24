@@ -39,7 +39,7 @@ class AuthController extends BaseApiController
         $user = $request->user('sanctum');
 
         if ($user) {
-            $user->currentAccessToken()->delete();
+            $user->currentAccessToken()?->delete();
         }
 
         return $this->successResponse(null, 'Deconnexion reussie');
@@ -48,7 +48,7 @@ class AuthController extends BaseApiController
     public function refresh(Request $request): JsonResponse
     {
         $user = $request->user()->load('company');
-        $user->currentAccessToken()->delete();
+        $user->currentAccessToken()?->delete();
 
         $accessToken = $user->createToken('access_token')->plainTextToken;
         $refreshToken = $user->createToken('refresh_token', ['refresh'])->plainTextToken;
@@ -73,7 +73,7 @@ class AuthController extends BaseApiController
     {
         $user = $request->user();
 
-        if (!$user->isTechnicien() && !$user->isSuperAdmin()) {
+        if (! $user->isTechnicien() && ! $user->isSuperAdmin()) {
             return $this->errorResponse('Action reservee aux techniciens et super admins', 403);
         }
 
@@ -84,7 +84,7 @@ class AuthController extends BaseApiController
         $company = Company::findOrFail($request->input('company_id'));
 
         return $this->successResponse([
-            'companyId'   => (string) $company->id,
+            'companyId' => (string) $company->id,
             'companyName' => $company->name,
         ], 'Entreprise selectionnee');
     }

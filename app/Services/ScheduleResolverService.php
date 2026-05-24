@@ -177,8 +177,11 @@ class ScheduleResolverService
 
     private function timeToMinutes(string $time): int
     {
-        [$h, $m] = explode(':', $time);
+        // Format attendu : HH:MM ou HH:MM:SS (24h). On ignore les secondes si presentes.
+        if (! preg_match('/^([0-1]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/', $time, $m)) {
+            throw new \InvalidArgumentException("Format horaire invalide: '{$time}'. Attendu HH:MM.");
+        }
 
-        return ((int) $h * 60) + (int) $m;
+        return ((int) $m[1] * 60) + (int) $m[2];
     }
 }
