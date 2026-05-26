@@ -59,7 +59,16 @@ class EmployeeController extends BaseApiController
      */
     public function show(string $id): JsonResponse
     {
+        $user = auth()->user();
         $employee = Employee::with('rfidCard')->findOrFail($id);
+
+        // Non-super_admin ne peut voir que les employes de sa propre entreprise
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $employee->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
 
         return $this->resourceResponse(new EmployeeResource($employee));
     }
@@ -110,6 +119,15 @@ class EmployeeController extends BaseApiController
     public function update(UpdateEmployeeRequest $request, string $id): JsonResponse
     {
         $employee = Employee::findOrFail($id);
+
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $employee->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         $employee->update($request->validated());
 
         TechnicienActivityLog::record('update', 'employee', (string) $employee->id, $employee->first_name.' '.$employee->last_name);
@@ -123,6 +141,15 @@ class EmployeeController extends BaseApiController
     public function destroy(string $id): JsonResponse
     {
         $employee = Employee::findOrFail($id);
+
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $employee->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         TechnicienActivityLog::record('delete', 'employee', (string) $employee->id, $employee->first_name.' '.$employee->last_name);
         $employee->delete();
 
@@ -135,6 +162,14 @@ class EmployeeController extends BaseApiController
     public function toggleActive(string $id): JsonResponse
     {
         $employee = Employee::findOrFail($id);
+
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $employee->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
         $employee->update(['is_active' => ! $employee->is_active]);
 
         TechnicienActivityLog::record(

@@ -14,6 +14,7 @@ class FeelbackDevice extends Model
 
     protected $fillable = [
         'serial_number',
+        'name',
         'company_id',
         'site_id',
         'is_online',

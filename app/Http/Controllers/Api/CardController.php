@@ -29,9 +29,14 @@ class CardController extends BaseApiController
             $q->where('status', $status);
         });
 
-        $cards = $query->get();
+        $query->when($request->input('search'), function ($q, $search) {
+            $q->where('uid', 'LIKE', "%{$search}%");
+        });
 
-        return $this->successResponse(RfidCardResource::collection($cards));
+        $cards = $query->orderBy('created_at', 'desc')
+            ->paginate($request->input('per_page', 15));
+
+        return $this->paginatedResponse(RfidCardResource::collection($cards));
     }
 
     /**
@@ -39,7 +44,16 @@ class CardController extends BaseApiController
      */
     public function show(string $id): JsonResponse
     {
+        $user = auth()->user();
         $card = RfidCard::with('employee')->findOrFail($id);
+
+        // Non-super_admin ne peut voir que les cartes de sa propre entreprise
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $card->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
 
         return $this->resourceResponse(new RfidCardResource($card));
     }
@@ -135,14 +149,17 @@ class CardController extends BaseApiController
     }
 
     /**
-     * Unblock a card and set it back to active.
+     * Unblock a card and set it back to active or inactive depending on assignment.
      */
     public function unblock(string $id): JsonResponse
     {
         $card = RfidCard::findOrFail($id);
 
+        // Une carte sans employe assigne revient a "inactive", pas "active"
+        $newStatus = $card->employee_id ? 'active' : 'inactive';
+
         $card->update([
-            'status' => 'active',
+            'status' => $newStatus,
             'blocked_at' => null,
             'block_reason' => null,
         ]);

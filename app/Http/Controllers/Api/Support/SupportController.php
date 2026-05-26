@@ -163,18 +163,33 @@ class SupportController extends BaseApiController
         $feel = FeelbackDevice::query()->withoutGlobalScopes()->where('is_witness', true)->with('site:id,name')->get();
         $qr = QrCode::query()->withoutGlobalScopes()->where('is_witness', true)->with('site:id,name')->get();
 
-        $map = fn ($coll, $kind, $timeCol) => $coll->map(fn ($d) => [
-            'id' => $d->id,
-            'kind' => $kind,
-            'name' => $d->name ?? $d->label ?? $d->serial_number ?? $d->id,
-            'serialNumber' => $d->serial_number ?? null,
-            'companyId' => $d->company_id ?? null,
-            'siteId' => $d->site_id ?? null,
-            'siteName' => $d->site?->name,
-            'isOnline' => (bool) ($d->is_online ?? $d->is_active ?? false),
-            'lastSeenAt' => $timeCol ? $d->{$timeCol}?->toIso8601String() : null,
-            'isWitness' => true,
-        ]);
+        $threshold = (int) config('devices.offline_threshold_minutes', 5);
+        $cutoff = now()->subMinutes($threshold);
+
+        // Statut "en ligne" base sur (is_online ET heartbeat recent) — sans fallback sur is_active
+        // qui ne reflete pas la presence reseau et faussait l'affichage des capteurs temoin.
+        $map = fn ($coll, $kind, $timeCol) => $coll->map(function ($d) use ($kind, $timeCol, $cutoff) {
+            $lastSeen = $timeCol ? $d->{$timeCol} : null;
+            if ($timeCol === null) {
+                // Pas de mecanisme de heartbeat (ex : QR code) : statut inconnu plutot que faux positif
+                $isOnline = null;
+            } else {
+                $isOnline = (bool) $d->is_online && $lastSeen && $lastSeen->greaterThanOrEqualTo($cutoff);
+            }
+
+            return [
+                'id' => $d->id,
+                'kind' => $kind,
+                'name' => $d->name ?? $d->label ?? $d->serial_number ?? $d->id,
+                'serialNumber' => $d->serial_number ?? null,
+                'companyId' => $d->company_id ?? null,
+                'siteId' => $d->site_id ?? null,
+                'siteName' => $d->site?->name,
+                'isOnline' => $isOnline,
+                'lastSeenAt' => $lastSeen?->toIso8601String(),
+                'isWitness' => true,
+            ];
+        });
 
         $all = $map($rfid, 'rfid', 'last_ping_at')
             ->concat($map($bio, 'biometric', 'last_sync_at'))

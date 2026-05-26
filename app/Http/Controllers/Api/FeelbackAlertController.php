@@ -16,9 +16,7 @@ class FeelbackAlertController extends BaseApiController
         $user = $request->user();
         if (!$user->isSuperAdmin()) {
             $activeCompanyId = $this->resolveActiveCompanyId();
-            $query->whereHas('site', function ($q) use ($activeCompanyId) {
-                $q->where('company_id', $activeCompanyId);
-            });
+            $query->where('company_id', $activeCompanyId);
         }
 
         if ($request->filled('site_id')) {

@@ -204,9 +204,8 @@ class EnrollmentController extends BaseApiController
 
         $enrollment->delete();
 
-        if ($wasEnrolled) {
-            BiometricDevice::where('id', $deviceId)->decrement('enrolled_count');
-        }
+        // enrolled_count est un alias withCount (pas une colonne DB), pas de decrement direct.
+        // On met juste a jour le flag biometric_enrolled de l'employe ci-dessous.
 
         $remainingEnrollments = FingerprintEnrollment::where('employee_id', $employeeId)->count();
         $employee = Employee::find($employeeId);

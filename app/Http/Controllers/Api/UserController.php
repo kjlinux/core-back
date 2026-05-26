@@ -162,7 +162,11 @@ class UserController extends BaseApiController
         $user->update($data);
         $user->load('company');
 
-        Mail::to($user->email)->send(new UserUpdatedMail($user));
+        try {
+            Mail::to($user->email)->send(new UserUpdatedMail($user));
+        } catch (\Exception $e) {
+            \Log::error('UserUpdatedMail failed for user ' . $user->id . ': ' . $e->getMessage());
+        }
 
         return $this->resourceResponse(new UserResource($user), 'Utilisateur mis a jour');
     }
@@ -215,7 +219,11 @@ class UserController extends BaseApiController
         $tempPassword = Str::random(12);
         $user->update(['password' => Hash::make($tempPassword)]);
 
-        Mail::to($user->email)->send(new UserPasswordResetMail($user, $tempPassword));
+        try {
+            Mail::to($user->email)->send(new UserPasswordResetMail($user, $tempPassword));
+        } catch (\Exception $e) {
+            \Log::error('UserPasswordResetMail failed for user ' . $user->id . ': ' . $e->getMessage());
+        }
 
         return $this->successResponse(null, 'Mot de passe reinitialise avec succes');
     }

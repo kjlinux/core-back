@@ -153,6 +153,7 @@ class MqttListenFeelbackCommand extends Command
 
             if (!$existingAlert) {
                 FeelbackAlert::create([
+                    'company_id' => $device->company_id,
                     'device_id' => $device->id,
                     'site_id' => $device->site_id,
                     'type' => 'threshold_exceeded',

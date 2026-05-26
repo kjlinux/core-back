@@ -24,11 +24,28 @@ class PayrollController extends BaseApiController
     // =========================================================================
 
     /**
+     * Verifie que l'utilisateur a acces a la config de paie de l'entreprise donnee.
+     */
+    private function authorizeCompanyAccess(string $companyId): bool
+    {
+        $user = auth()->user();
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+        $activeCompanyId = $this->resolveActiveCompanyId();
+        return (string) $activeCompanyId === (string) $companyId;
+    }
+
+    /**
      * GET /payroll/config/{companyId}
      * Retourne la config de paie de l'entreprise (creee a la volee si inexistante).
      */
     public function getConfig(string $companyId): JsonResponse
     {
+        if (! $this->authorizeCompanyAccess($companyId)) {
+            return $this->errorResponse('Acces non autorise', 403);
+        }
+
         $config = PayrollConfig::with('latenessRules')
             ->firstOrCreate(
                 ['company_id' => $companyId],
@@ -52,6 +69,10 @@ class PayrollController extends BaseApiController
      */
     public function saveConfig(SavePayrollConfigRequest $request, string $companyId): JsonResponse
     {
+        if (! $this->authorizeCompanyAccess($companyId)) {
+            return $this->errorResponse('Acces non autorise', 403);
+        }
+
         $config = PayrollConfig::with('latenessRules')
             ->updateOrCreate(
                 ['company_id' => $companyId],
@@ -67,6 +88,10 @@ class PayrollController extends BaseApiController
      */
     public function saveLatenessRules(SaveLatenessRulesRequest $request, string $companyId): JsonResponse
     {
+        if (! $this->authorizeCompanyAccess($companyId)) {
+            return $this->errorResponse('Acces non autorise', 403);
+        }
+
         // Supprimer les regles existantes et recreer
         LatenessRule::where('company_id', $companyId)->delete();
 

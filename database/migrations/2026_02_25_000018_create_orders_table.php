@@ -19,7 +19,7 @@ return new class extends Migration
             $table->enum('status', ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'])->default('pending');
             $table->enum('payment_method', ['mobile_money', 'bank_card', 'manual'])->default('mobile_money');
             $table->enum('payment_status', ['pending', 'paid', 'failed', 'refunded'])->default('pending');
-            $table->json('delivery_address');
+            $table->json('delivery_address')->nullable();
             $table->string('invoice_url')->nullable();
             $table->string('payment_token')->nullable();
             $table->timestamps();

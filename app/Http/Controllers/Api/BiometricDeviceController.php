@@ -39,6 +39,14 @@ class BiometricDeviceController extends BaseApiController
             $q->where('status', 'enrolled');
         }])->findOrFail($id);
 
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $device->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         return $this->resourceResponse(new BiometricDeviceResource($device));
     }
 
@@ -65,6 +73,14 @@ class BiometricDeviceController extends BaseApiController
     public function destroy(Request $request, string $id): JsonResponse
     {
         $device = BiometricDevice::findOrFail($id);
+
+        $authUser = $request->user();
+        if (! $authUser->isSuperAdmin() && ! $authUser->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $device->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
 
         BiometricAuditLog::create([
             'user_id' => $request->user()->id,

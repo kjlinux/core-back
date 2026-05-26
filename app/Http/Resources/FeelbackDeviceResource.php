@@ -17,6 +17,7 @@ class FeelbackDeviceResource extends JsonResource
         return [
             'id' => (string) $this->id,
             'serialNumber' => $this->serial_number,
+            'name' => $this->name,
             'companyId' => (string) $this->company_id,
             'siteId' => (string) $this->site_id,
             'siteName' => $this->when(

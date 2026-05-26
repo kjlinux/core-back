@@ -33,6 +33,14 @@ class ScheduleController extends BaseApiController
     {
         $schedule = Schedule::findOrFail($id);
 
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $schedule->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         return $this->resourceResponse(new ScheduleResource($schedule));
     }
 
@@ -53,6 +61,15 @@ class ScheduleController extends BaseApiController
     public function update(UpdateScheduleRequest $request, string $id): JsonResponse
     {
         $schedule = Schedule::findOrFail($id);
+
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $schedule->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         $schedule->update($request->validated());
 
         return $this->resourceResponse(new ScheduleResource($schedule), 'Horaire mis a jour avec succes');
@@ -64,6 +81,15 @@ class ScheduleController extends BaseApiController
     public function destroy(string $id): JsonResponse
     {
         $schedule = Schedule::findOrFail($id);
+
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $schedule->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         $schedule->delete();
 
         return $this->noContentResponse();

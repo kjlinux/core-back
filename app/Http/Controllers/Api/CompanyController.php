@@ -42,9 +42,19 @@ class CompanyController extends BaseApiController
 
     /**
      * Get a single company by ID.
+     * Non-super_admin users can only see their own company.
      */
     public function show(string $id): JsonResponse
     {
+        $user = auth()->user();
+
+        // Non-super_admin ne peut voir que sa propre entreprise
+        if (! $user->isSuperAdmin() && ! $user->isTechnicien() && ! $user->isSupportIt()) {
+            if ((string) $user->company_id !== (string) $id) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         $company = Company::with('sites.departments')
             ->withCount('employees')
             ->findOrFail($id);
@@ -86,9 +96,18 @@ class CompanyController extends BaseApiController
 
     /**
      * Get all sites for a specific company.
+     * Non-super_admin users can only see sites of their own company.
      */
     public function sites(string $id): JsonResponse
     {
+        $user = auth()->user();
+
+        if (! $user->isSuperAdmin() && ! $user->isTechnicien() && ! $user->isSupportIt()) {
+            if ((string) $user->company_id !== (string) $id) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         $company = Company::findOrFail($id);
 
         $sites = $company->sites()->with('departments')->get();

@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             // CompanySeeder::class,
             // SiteSeeder::class,
             // DepartmentSeeder::class,
+            SubscriptionPlanSeeder::class,
             UserSeeder::class,
             // EmployeeSeeder::class,
             // RfidCardSeeder::class,

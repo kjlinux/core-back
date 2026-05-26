@@ -27,7 +27,7 @@ class StoreOrderRequest extends FormRequest
             'delivery_address.street' => ['required', 'string'],
             'delivery_address.city' => ['required', 'string'],
             'delivery_address.country' => ['required', 'string'],
-            'payment_method' => ['required', 'in:mobile_money,bank_card,manual'],
+            'payment_method' => ['required', 'in:intouch_mobile_money,intouch_card,manual'],
         ];
     }
 }

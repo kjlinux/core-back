@@ -11,6 +11,7 @@ class FeelbackAlert extends Model
     use HasUuid;
 
     protected $fillable = [
+        'company_id',
         'device_id',
         'site_id',
         'type',

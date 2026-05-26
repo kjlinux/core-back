@@ -61,6 +61,8 @@ Route::post('/auth/logout', [AuthController::class, 'logout']);
 Route::post('/auth/forgot-password', ForgotPasswordController::class)->middleware('throttle:5,1');
 Route::post('/auth/reset-password', ResetPasswordController::class)->middleware('throttle:5,1');
 Route::post('/payment/callback', [PaymentCallbackController::class, 'handle']);
+Route::post('/payment/intouch/callback', [PaymentCallbackController::class, 'intouch']);
+Route::get('/subscriptions/plans', [\App\Http\Controllers\Api\SubscriptionController::class, 'plans']);
 
 // Routes publiques QR — utilisées par les employés sans compte (téléphone mobile)
 Route::post('/qr-attendance/scan', [QrAttendanceController::class, 'scan']);
@@ -85,6 +87,46 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/select-company', [AuthController::class, 'selectCompany']);
 
     // =============================================
+    // Subscriptions (toute compagnie authentifiee)
+    // =============================================
+    Route::prefix('subscriptions')->group(function () {
+        Route::get('/me', [\App\Http\Controllers\Api\SubscriptionController::class, 'me']);
+        Route::get('/history', [\App\Http\Controllers\Api\SubscriptionController::class, 'history']);
+        Route::post('/subscribe', [\App\Http\Controllers\Api\SubscriptionController::class, 'subscribe']);
+        Route::post('/upgrade', [\App\Http\Controllers\Api\SubscriptionController::class, 'upgrade']);
+        Route::post('/pay-next-period', [\App\Http\Controllers\Api\SubscriptionController::class, 'payNextPeriod']);
+    });
+
+    // Admin: gestion des abonnements de toutes les compagnies
+    Route::middleware('role:super_admin')->prefix('admin/subscriptions')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\AdminSubscriptionController::class, 'index']);
+        Route::get('/analytics', [\App\Http\Controllers\Api\AdminSubscriptionController::class, 'analytics']);
+    });
+    Route::middleware('role:super_admin')->patch('/admin/companies/{id}/subscription', [\App\Http\Controllers\Api\AdminSubscriptionController::class, 'update']);
+
+    // =============================================
+    // Fiches d'installation (technicien + super_admin)
+    // =============================================
+    Route::middleware('role:super_admin,technicien')->group(function () {
+        Route::get('/installation-sheets', [\App\Http\Controllers\Api\InstallationSheetController::class, 'index']);
+        Route::get('/installation-sheets/{id}', [\App\Http\Controllers\Api\InstallationSheetController::class, 'show']);
+        Route::post('/installation-sheets', [\App\Http\Controllers\Api\InstallationSheetController::class, 'store']);
+    });
+
+    // =============================================
+    // CRM Followups J+2/J+7/J+30 — usage interne TANGA GROUP
+    // (chargés de compte / commerciaux : super_admin + technicien)
+    // Le client (admin_enterprise) ne doit PAS voir le suivi commercial le concernant.
+    // =============================================
+    Route::middleware('role:super_admin,technicien')->prefix('followups')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\ClientFollowupController::class, 'index']);
+        Route::get('/dashboard', [\App\Http\Controllers\Api\ClientFollowupController::class, 'dashboard']);
+        Route::get('/{id}', [\App\Http\Controllers\Api\ClientFollowupController::class, 'show']);
+        Route::patch('/{id}', [\App\Http\Controllers\Api\ClientFollowupController::class, 'update']);
+        Route::post('/{id}/escalate', [\App\Http\Controllers\Api\ClientFollowupController::class, 'escalate']);
+    });
+
+    // =============================================
     // Super Admin + Technicien (setup/onboarding)
     // =============================================
     Route::middleware('role:super_admin,technicien')->group(function () {
@@ -107,7 +149,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Admin orders + reports
         Route::get('/admin/orders', [AdminOrderController::class, 'index']);
-        Route::get('/admin/reports/sales', [AdminSalesReportController::class, 'index']);
+        Route::middleware('plan:garantie,premium')->get('/admin/reports/sales', [AdminSalesReportController::class, 'index']);
 
         // MQTT
         Route::post('/mqtt/test', [MqttController::class, 'testConnection']);
@@ -310,9 +352,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/firmware/logs', [FirmwareController::class, 'logs']);
 
         // Mise à jour en masse + progression (admin_enterprise, technicien, super_admin)
-        Route::post('/firmware/trigger-company-update', [FirmwareController::class, 'triggerCompanyUpdate']);
+        Route::middleware('plan:garantie,premium')->post('/firmware/trigger-company-update', [FirmwareController::class, 'triggerCompanyUpdate']);
         Route::get('/firmware/company-update-progress', [FirmwareController::class, 'companyUpdateProgress']);
-        Route::post('/firmware/retry-failed', [FirmwareController::class, 'retryFailed']);
+        Route::middleware('plan:garantie,premium')->post('/firmware/retry-failed', [FirmwareController::class, 'retryFailed']);
 
         // Ecriture : super_admin + technicien seulement
         Route::middleware('role:super_admin,technicien')->group(function () {
@@ -352,9 +394,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
 
     // =============================================
-    // Paie (super_admin + admin_enterprise)
+    // Paie (super_admin + admin_enterprise) — necessite plan Garantie ou Premium
     // =============================================
-    Route::middleware('role:super_admin,admin_enterprise')->group(function () {
+    Route::middleware(['role:super_admin,admin_enterprise', 'plan:garantie,premium'])->group(function () {
         // Configuration
         Route::get('/payroll/config/{companyId}', [PayrollController::class, 'getConfig']);
         Route::put('/payroll/config/{companyId}', [PayrollController::class, 'saveConfig']);

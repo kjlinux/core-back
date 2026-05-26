@@ -37,6 +37,14 @@ class DepartmentController extends BaseApiController
     {
         $department = Department::withCount('employees')->findOrFail($id);
 
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $department->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         return $this->resourceResponse(new DepartmentResource($department));
     }
 

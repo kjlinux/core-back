@@ -15,6 +15,7 @@ class StoreFeelbackDeviceRequest extends FormRequest
     {
         return [
             'serial_number' => ['required', 'string', 'unique:feelback_devices'],
+            'name' => ['nullable', 'string', 'max:100'],
             'company_id' => ['required', 'exists:companies,id'],
             'site_id' => ['required', 'exists:sites,id'],
         ];

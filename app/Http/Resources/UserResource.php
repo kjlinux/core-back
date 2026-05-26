@@ -26,6 +26,15 @@ class UserResource extends JsonResource
                 $this->relationLoaded('company'),
                 fn () => $this->company?->name
             ),
+            'companySubscription' => $this->when(
+                $this->relationLoaded('company') && $this->company,
+                fn () => [
+                    'plan' => $this->company->subscription,
+                    'expires_at' => $this->company->subscription_expires_at?->toISOString(),
+                    'next_period_paid' => (bool) $this->company->subscription_next_period_paid,
+                    'is_active' => $this->company->isSubscriptionActive(),
+                ]
+            ),
             'employeeId' => $this->employee_id ? (string) $this->employee_id : null,
             'avatar' => $this->avatar,
             'isActive' => (bool) $this->is_active,

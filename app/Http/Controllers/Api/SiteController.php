@@ -35,6 +35,14 @@ class SiteController extends BaseApiController
     {
         $site = Site::with('departments')->findOrFail($id);
 
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $site->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         return $this->resourceResponse(new SiteResource($site));
     }
 

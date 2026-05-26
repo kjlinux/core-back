@@ -34,6 +34,14 @@ class FeelbackDeviceController extends BaseApiController
     {
         $device = FeelbackDevice::with('site')->findOrFail($id);
 
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $device->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         return $this->resourceResponse(new FeelbackDeviceResource($device));
     }
 
@@ -50,6 +58,15 @@ class FeelbackDeviceController extends BaseApiController
     public function update(UpdateFeelbackDeviceRequest $request, string $id): JsonResponse
     {
         $device = FeelbackDevice::findOrFail($id);
+
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $device->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         $device->update($request->validated());
 
         return $this->resourceResponse(new FeelbackDeviceResource($device));
@@ -58,6 +75,15 @@ class FeelbackDeviceController extends BaseApiController
     public function destroy(string $id): JsonResponse
     {
         $device = FeelbackDevice::findOrFail($id);
+
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $device->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         $device->delete();
 
         return $this->noContentResponse();

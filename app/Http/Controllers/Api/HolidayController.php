@@ -43,6 +43,15 @@ class HolidayController extends BaseApiController
     public function update(UpdateHolidayRequest $request, string $id): JsonResponse
     {
         $holiday = Holiday::findOrFail($id);
+
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $holiday->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         $holiday->update($request->validated());
 
         return $this->resourceResponse(new HolidayResource($holiday), 'Jour ferie mis a jour avec succes');
@@ -54,6 +63,15 @@ class HolidayController extends BaseApiController
     public function destroy(string $id): JsonResponse
     {
         $holiday = Holiday::findOrFail($id);
+
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $holiday->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         $holiday->delete();
 
         return $this->noContentResponse();

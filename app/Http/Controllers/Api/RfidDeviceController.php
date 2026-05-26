@@ -35,6 +35,14 @@ class RfidDeviceController extends BaseApiController
     {
         $device = RfidDevice::with('site')->findOrFail($id);
 
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $device->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         return $this->resourceResponse(new RfidDeviceResource($device));
     }
 
@@ -53,6 +61,15 @@ class RfidDeviceController extends BaseApiController
     public function update(UpdateRfidDeviceRequest $request, string $id): JsonResponse
     {
         $device = RfidDevice::findOrFail($id);
+
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $device->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         $device->update($request->validated());
 
         TechnicienActivityLog::record('update', 'rfid_device', (string) $device->id, $device->name . ' (' . $device->serial_number . ')');
@@ -63,6 +80,15 @@ class RfidDeviceController extends BaseApiController
     public function destroy(string $id): JsonResponse
     {
         $device = RfidDevice::findOrFail($id);
+
+        $user = auth()->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $device->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
+
         TechnicienActivityLog::record('delete', 'rfid_device', (string) $device->id, $device->name . ' (' . $device->serial_number . ')');
         $device->delete();
 

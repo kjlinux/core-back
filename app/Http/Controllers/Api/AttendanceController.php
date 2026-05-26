@@ -118,7 +118,16 @@ class AttendanceController extends BaseApiController
             'end_date' => 'required|date|after_or_equal:start_date',
         ]);
 
-        Employee::findOrFail($employeeId);
+        $employee = Employee::findOrFail($employeeId);
+
+        // Non-super_admin ne peut voir que les employes de sa propre entreprise
+        $user = $request->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId && (string) $employee->company_id !== (string) $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
 
         $records = AttendanceRecord::with('employee.department')
             ->where('employee_id', $employeeId)
@@ -138,6 +147,20 @@ class AttendanceController extends BaseApiController
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
         ]);
+
+        // Non-super_admin ne peut voir que les departements de sa propre entreprise
+        $user = $request->user();
+        if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId) {
+                $deptExists = \App\Models\Department::where('id', $departmentId)
+                    ->where('company_id', $companyId)
+                    ->exists();
+                if (! $deptExists) {
+                    return $this->errorResponse('Acces non autorise', 403);
+                }
+            }
+        }
 
         $employeeIds = Employee::where('department_id', $departmentId)->pluck('id');
 

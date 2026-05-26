@@ -9,3 +9,7 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('health:check-devices')->everyMinute()->withoutOverlapping();
+
+Schedule::command('subscriptions:rollover-prepaid')->dailyAt('00:05')->withoutOverlapping();
+Schedule::command('subscriptions:check-expiry')->dailyAt('02:00')->withoutOverlapping();
+Schedule::command('subscriptions:send-reminders')->dailyAt('08:00')->withoutOverlapping();

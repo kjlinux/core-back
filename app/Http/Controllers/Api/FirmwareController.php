@@ -142,11 +142,17 @@ class FirmwareController extends BaseApiController
             $this->scopeByCompany($rfidQuery);
             $rfidDevices = $rfidQuery->get();
 
+            // Charger tous les derniers logs en une seule requete (evite N+1)
+            $rfidDeviceIds = $rfidDevices->pluck('id')->all();
+            $rfidLatestLogs = OtaUpdateLog::whereIn('device_id', $rfidDeviceIds)
+                ->where('device_kind', 'rfid')
+                ->orderByDesc('created_at')
+                ->get()
+                ->unique('device_id')
+                ->keyBy('device_id');
+
             foreach ($rfidDevices as $device) {
-                $lastLog = OtaUpdateLog::where('device_id', $device->id)
-                    ->where('device_kind', 'rfid')
-                    ->latest()
-                    ->first();
+                $lastLog = $rfidLatestLogs->get($device->id);
 
                 $statuses[] = [
                     'deviceId'       => (string) $device->id,
@@ -166,11 +172,17 @@ class FirmwareController extends BaseApiController
             $this->scopeByCompany($bioQuery);
             $bioDevices = $bioQuery->get();
 
+            // Charger tous les derniers logs en une seule requete (evite N+1)
+            $bioDeviceIds = $bioDevices->pluck('id')->all();
+            $bioLatestLogs = OtaUpdateLog::whereIn('device_id', $bioDeviceIds)
+                ->where('device_kind', 'biometric')
+                ->orderByDesc('created_at')
+                ->get()
+                ->unique('device_id')
+                ->keyBy('device_id');
+
             foreach ($bioDevices as $device) {
-                $lastLog = OtaUpdateLog::where('device_id', $device->id)
-                    ->where('device_kind', 'biometric')
-                    ->latest()
-                    ->first();
+                $lastLog = $bioLatestLogs->get($device->id);
 
                 $statuses[] = [
                     'deviceId'       => (string) $device->id,
@@ -376,6 +388,15 @@ class FirmwareController extends BaseApiController
         }
         $devices = $query->get();
 
+        // Charger tous les logs pertinents en une seule requete (evite N+1)
+        $deviceIds = $devices->pluck('id')->all();
+        $latestLogsByDevice = OtaUpdateLog::whereIn('device_id', $deviceIds)
+            ->where('firmware_version_id', $firmware->id)
+            ->orderByDesc('started_at')
+            ->get()
+            ->unique('device_id')
+            ->keyBy('device_id');
+
         $result = [
             'total'      => $devices->count(),
             'pending'    => 0,
@@ -386,10 +407,7 @@ class FirmwareController extends BaseApiController
         ];
 
         foreach ($devices as $device) {
-            $log = OtaUpdateLog::where('device_id', $device->id)
-                ->where('firmware_version_id', $firmware->id)
-                ->latest('started_at')
-                ->first();
+            $log = $latestLogsByDevice->get($device->id);
 
             $status = $log?->status ?? 'pending';
 

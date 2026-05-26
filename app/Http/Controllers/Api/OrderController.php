@@ -7,7 +7,7 @@ use App\Http\Resources\OrderResource;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
-use App\Services\LigdiCashService;
+use App\Services\Payment\IntouchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,8 +17,21 @@ class OrderController extends BaseApiController
 {
     public function index(Request $request): JsonResponse
     {
-        $query = Order::with('items')
-            ->where('company_id', $request->user()->company_id);
+        $user = $request->user();
+        $query = Order::with(['items', 'company']);
+
+        // super_admin voit toutes les commandes (ou filtre par company_id optionnel)
+        // Les autres roles voient uniquement les commandes de leur entreprise
+        if ($user->isSuperAdmin()) {
+            if ($request->filled('company_id')) {
+                $query->where('company_id', $request->input('company_id'));
+            }
+        } else {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($companyId) {
+                $query->where('company_id', $companyId);
+            }
+        }
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -36,7 +49,16 @@ class OrderController extends BaseApiController
 
     public function show(string $id): JsonResponse
     {
+        $user = auth()->user();
         $order = Order::with('items')->findOrFail($id);
+
+        // Verifier que l'utilisateur a le droit de voir cette commande
+        if (! $user->isSuperAdmin()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($order->company_id !== $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
 
         return $this->resourceResponse(new OrderResource($order));
     }
@@ -77,9 +99,9 @@ class OrderController extends BaseApiController
                 'total' => $total,
                 'currency' => 'XOF',
                 'status' => 'pending',
-                'payment_method' => $data['payment_method'] ?? 'mobile_money',
+                'payment_method' => $data['payment_method'] ?? 'intouch_mobile_money',
                 'payment_status' => 'pending',
-                'delivery_address' => $data['delivery_address'] ?? null,
+                'delivery_address' => $data['delivery_address'] ?? [],
             ]);
 
             foreach ($orderItems as $itemData) {
@@ -98,7 +120,16 @@ class OrderController extends BaseApiController
 
     public function cancel(string $id): JsonResponse
     {
+        $user = auth()->user();
         $order = Order::findOrFail($id);
+
+        // Verifier que l'utilisateur a le droit d'annuler cette commande
+        if (! $user->isSuperAdmin()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($order->company_id !== $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
 
         if ($order->status !== 'pending') {
             return $this->errorResponse('Seules les commandes en attente peuvent etre annulees', 422);
@@ -109,9 +140,18 @@ class OrderController extends BaseApiController
         return $this->resourceResponse(new OrderResource($order));
     }
 
-    public function initiatePayment(string $id, LigdiCashService $ligdiCash): JsonResponse
+    public function initiatePayment(string $id, IntouchService $intouch): JsonResponse
     {
+        $user = auth()->user();
         $order = Order::with('items')->findOrFail($id);
+
+        // Verifier que l'utilisateur a le droit d'acceder a cette commande
+        if (! $user->isSuperAdmin()) {
+            $companyId = $this->resolveActiveCompanyId();
+            if ($order->company_id !== $companyId) {
+                return $this->errorResponse('Acces non autorise', 403);
+            }
+        }
 
         // Paiement manuel : pas de passerelle, juste confirmation en attente
         if ($order->payment_method === 'manual') {
@@ -130,15 +170,25 @@ class OrderController extends BaseApiController
             ];
         })->toArray();
 
-        $result = $ligdiCash->createPayment([
+        $result = $intouch->createPayment([
             'amount' => $order->total,
-            'order_id' => $order->id,
-            'order_number' => $order->order_number,
+            'reference' => $order->id,
             'description' => 'Commande ' . $order->order_number,
+            'type' => 'order',
             'items' => $items,
+            'customer' => [
+                'firstname' => $user->first_name ?? '',
+                'lastname' => $user->last_name ?? '',
+                'email' => $user->email ?? null,
+                'phone' => $order->delivery_address['phone'] ?? null,
+            ],
+            'custom_data' => [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+            ],
         ]);
 
-        if (!$result['success']) {
+        if (! ($result['success'] ?? false)) {
             // Passerelle indisponible : commande créée, retourner succès avec flag pending
             return $this->successResponse([
                 'payment_url' => null,
@@ -148,11 +198,11 @@ class OrderController extends BaseApiController
             ]);
         }
 
-        $order->update(['payment_token' => $result['token']]);
+        $order->update(['payment_token' => $result['token'] ?? null]);
 
         return $this->successResponse([
-            'payment_url' => $result['payment_url'],
-            'token' => $result['token'],
+            'payment_url' => $result['payment_url'] ?? null,
+            'token' => $result['token'] ?? null,
             'pending' => false,
         ]);
     }
