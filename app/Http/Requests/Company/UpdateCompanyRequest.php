@@ -18,7 +18,7 @@ class UpdateCompanyRequest extends FormRequest
             'email' => ['sometimes', 'email'],
             'phone' => ['sometimes', 'string'],
             'address' => ['sometimes', 'string'],
-            'subscription' => ['sometimes', 'in:freemium,garantie,premium'],
+            'subscription' => ['sometimes', 'nullable', 'in:freemium,garantie,premium'],
             'logo' => ['sometimes', 'nullable', 'string'],
         ];
     }

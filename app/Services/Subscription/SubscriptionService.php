@@ -278,6 +278,16 @@ class SubscriptionService
      */
     protected function createPayment(Company $company, SubscriptionPlan $toPlan, int $amount, bool $isProrata, ?User $actor, bool $prepaid = false): array
     {
+        // Anti-doublon : empeche un second paiement tant qu'un precedent est en attente
+        // (ex : double-clic, ou paiement initie non finalise). On laisse 30 min de fenetre.
+        $existingPending = SubscriptionPayment::where('company_id', $company->id)
+            ->where('payment_status', SubscriptionPayment::STATUS_PENDING)
+            ->where('created_at', '>', now()->subMinutes(30))
+            ->first();
+        if ($existingPending) {
+            throw new RuntimeException('Un paiement est deja en cours. Veuillez le finaliser ou patienter quelques minutes.');
+        }
+
         $payment = SubscriptionPayment::create([
             'company_id' => $company->id,
             'from_plan' => $company->subscription,

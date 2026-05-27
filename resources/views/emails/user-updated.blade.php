@@ -4,8 +4,8 @@
 <p class="greeting">Bonjour, {{ $user->first_name }} {{ $user->last_name }},</p>
 
 <p class="text">
-  Les informations de votre compte sur la plateforme <strong>Core Tanga Group</strong>
-  ont ete mises a jour. Voici le recap de votre profil actuel :
+  Les informations de votre compte sur la plateforme <strong>TangaFlow</strong>
+  ont été mises à jour. Voici le récap de votre profil actuel :
 </p>
 
 <div class="info-box">
@@ -50,7 +50,7 @@
 </div>
 
 <p class="text">
-  Si vous n'etes pas a l'origine de cette modification ou si ces informations vous semblent incorrectes,
-  veuillez contacter votre administrateur immediatement.
+  Si vous n'êtes pas à l'origine de cette modification ou si ces informations vous semblent incorrectes,
+  veuillez contacter votre administrateur immédiatement.
 </p>
 @endsection

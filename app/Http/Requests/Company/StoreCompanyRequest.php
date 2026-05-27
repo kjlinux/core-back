@@ -18,7 +18,7 @@ class StoreCompanyRequest extends FormRequest
             'email' => ['required', 'email'],
             'phone' => ['required', 'string'],
             'address' => ['required', 'string'],
-            'subscription' => ['sometimes', 'in:freemium,garantie,premium'],
+            'subscription' => ['sometimes', 'nullable', 'in:freemium,garantie,premium'],
             'logo' => ['sometimes', 'nullable', 'string'],
         ];
     }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ $subject ?? 'Core Tanga Group' }}</title>
+  <title>{{ $subject ?? 'TangaFlow' }}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #334155; }
@@ -34,15 +34,15 @@
 <body>
   <div class="wrapper">
     <div class="header">
-      <h1>Core Tanga Group</h1>
+      <h1>TangaFlow</h1>
       <p>Plateforme de gestion d'entreprise</p>
     </div>
     <div class="body">
       @yield('content')
     </div>
     <div class="footer">
-      <p>Cet email a ete envoye automatiquement par la plateforme Core Tanga Group.<br>
-      Merci de ne pas repondre a cet email.</p>
+      <p>Cet email a été envoyé automatiquement par la plateforme TangaFlow.<br>
+      Merci de ne pas répondre à cet email.</p>
     </div>
   </div>
 </body>

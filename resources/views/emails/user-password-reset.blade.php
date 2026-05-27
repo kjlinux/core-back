@@ -4,7 +4,7 @@
 <p class="greeting">Bonjour, {{ $user->first_name }} {{ $user->last_name }},</p>
 
 <p class="text">
-  Votre mot de passe sur la plateforme <strong>Core Tanga Group</strong> a ete reinitialise
+  Votre mot de passe sur la plateforme <strong>TangaFlow</strong> a été réinitialisé
   par un administrateur. Voici votre nouveau mot de passe temporaire :
 </p>
 
@@ -13,8 +13,8 @@
 </div>
 
 <p class="text">
-  Utilisez ce mot de passe pour vous connecter, puis changez-le immediatement depuis votre
-  profil pour securiser votre compte.
+  Utilisez ce mot de passe pour vous connecter, puis changez-le immédiatement depuis votre
+  profil pour sécuriser votre compte.
 </p>
 
 <div class="info-box">
@@ -27,6 +27,6 @@
 </div>
 
 <p class="text" style="color:#dc2626; font-size:13px;">
-  Si vous n'avez pas demande cette reinitialisation, contactez votre administrateur sans delai.
+  Si vous n'avez pas demandé cette réinitialisation, contactez votre administrateur sans délai.
 </p>
 @endsection

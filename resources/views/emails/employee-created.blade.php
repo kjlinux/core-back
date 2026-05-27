@@ -4,8 +4,8 @@
 <p class="greeting">Bienvenue, {{ $employee->first_name }} {{ $employee->last_name }} !</p>
 
 <p class="text">
-  Votre compte employe a ete cree sur la plateforme <strong>Core Tanga Group</strong>
-  par votre entreprise. Vous pouvez desormais consulter vos fiches de paie, vos presences
+  Votre compte employé a été créé sur la plateforme <strong>TangaFlow</strong>
+  par votre entreprise. Vous pouvez désormais consulter vos fiches de paie, vos présences
   et soumettre vos justificatifs d'absence en ligne.
 </p>
 
@@ -27,7 +27,7 @@
     @endif
     @if($employee->department)
     <tr>
-      <td>Departement</td>
+      <td>Département</td>
       <td>{{ $employee->department->name }}</td>
     </tr>
     @endif
@@ -46,7 +46,7 @@
 
 <p class="text">
   Connectez-vous avec votre adresse email et ce mot de passe, puis rendez-vous dans
-  <strong>Mon profil</strong> pour changer votre mot de passe et securiser votre compte.
+  <strong>Mon profil</strong> pour changer votre mot de passe et sécuriser votre compte.
 </p>
 
 <hr class="divider">
@@ -56,11 +56,11 @@
 </p>
 
 <p class="text" style="font-size:13px; color:#64748b;">
-  Depuis votre espace, vous avez acces a :
+  Depuis votre espace, vous avez accès à :
 </p>
 <ul style="font-size:13px; color:#64748b; padding-left:20px; line-height:2;">
-  <li>Vos <strong>presences et pointages</strong></li>
-  <li>Vos <strong>fiches de paie</strong> (consultation et telechargement PDF)</li>
+  <li>Vos <strong>présences et pointages</strong></li>
+  <li>Vos <strong>fiches de paie</strong> (consultation et téléchargement PDF)</li>
   <li>La soumission de <strong>justificatifs d'absence</strong> en ligne</li>
   <li>La modification de votre <strong>mot de passe</strong></li>
 </ul>

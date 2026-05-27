@@ -1,11 +1,11 @@
 @extends('emails.layout')
 
 @section('content')
-<p class="greeting">Mise a jour firmware disponible</p>
+<p class="greeting">Mise à jour firmware disponible</p>
 
 <p class="text">
   Une nouvelle version du firmware est disponible pour vos capteurs.
-  Connectez-vous a la plateforme pour effectuer la mise a jour de vos terminaux.
+  Connectez-vous à la plateforme pour effectuer la mise à jour de vos terminaux.
 </p>
 
 <div class="info-box">
@@ -22,7 +22,7 @@
         @if($firmware->device_kind === 'rfid')
           <span class="badge badge-admin">Pointage RFID</span>
         @else
-          <span class="badge badge-manager">Biometrique</span>
+          <span class="badge badge-manager">Biométrique</span>
         @endif
       </td>
     </tr>
@@ -40,8 +40,8 @@
 </div>
 
 <p class="text">
-  Pour mettre a jour vos capteurs, connectez-vous a la plateforme.
-  Un bandeau de notification vous guidera directement vers la mise a jour.
+  Pour mettre à jour vos capteurs, connectez-vous à la plateforme.
+  Un bandeau de notification vous guidera directement vers la mise à jour.
 </p>
 
 <div style="text-align:center;">
@@ -51,7 +51,7 @@
 <hr class="divider">
 
 <p class="text" style="font-size:13px;color:#64748b;">
-  La mise a jour est appliquee automatiquement a tous vos capteurs connectes.
-  Vous pouvez suivre la progression en temps reel depuis la plateforme.
+  La mise à jour est appliquée automatiquement à tous vos capteurs connectés.
+  Vous pouvez suivre la progression en temps réel depuis la plateforme.
 </p>
 @endsection

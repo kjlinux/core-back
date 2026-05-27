@@ -28,8 +28,9 @@ class AdminSubscriptionController extends BaseApiController
     public function update(Request $request, string $companyId): JsonResponse
     {
         $data = $request->validate([
-            'plan_code' => 'required|string',
-            'expires_at' => 'nullable|date',
+            'plan_code'        => 'required|in:freemium,garantie,premium',
+            'expires_at'       => 'nullable|date',
+            'warranty_ends_at' => 'nullable|date',
         ]);
 
         $company = Company::findOrFail($companyId);
@@ -39,6 +40,14 @@ class AdminSubscriptionController extends BaseApiController
             $this->service->adminChange($company, $data['plan_code'], $expiresAt, $request->user());
         } catch (\Throwable $e) {
             return $this->errorResponse($e->getMessage(), 422);
+        }
+
+        if (array_key_exists('warranty_ends_at', $data)) {
+            $company->warranty_ends_at = $data['warranty_ends_at'] ? Carbon::parse($data['warranty_ends_at']) : null;
+            if ($data['warranty_ends_at'] && ! $company->warranty_starts_at) {
+                $company->warranty_starts_at = now();
+            }
+            $company->save();
         }
 
         return $this->successResponse($company->fresh());

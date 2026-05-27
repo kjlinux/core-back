@@ -43,7 +43,7 @@ class SubscriptionController extends BaseApiController
 
     public function subscribe(Request $request): JsonResponse
     {
-        $data = $request->validate(['plan_code' => 'required|string']);
+        $data = $request->validate(['plan_code' => 'required|in:freemium,garantie,premium']);
         $user = $request->user();
         $company = $user->company;
 
@@ -62,7 +62,7 @@ class SubscriptionController extends BaseApiController
 
     public function upgrade(Request $request): JsonResponse
     {
-        $data = $request->validate(['plan_code' => 'required|string']);
+        $data = $request->validate(['plan_code' => 'required|in:freemium,garantie,premium']);
         $user = $request->user();
         $company = $user->company;
 

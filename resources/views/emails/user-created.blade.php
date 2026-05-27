@@ -4,7 +4,7 @@
 <p class="greeting">Bienvenue, {{ $user->first_name }} {{ $user->last_name }} !</p>
 
 <p class="text">
-  Votre compte a ete cree avec succes sur la plateforme <strong>Core Tanga Group</strong>.
+  Votre compte a été créé avec succès sur la plateforme <strong>TangaFlow</strong>.
   Voici vos informations de connexion :
 </p>
 
@@ -44,8 +44,8 @@
 </div>
 
 <p class="text">
-  Pour des raisons de securite, nous vous recommandons de changer votre mot de passe
-  des votre premiere connexion.
+  Pour des raisons de sécurité, nous vous recommandons de changer votre mot de passe
+  dès votre première connexion.
 </p>
 
 <hr class="divider">
@@ -56,27 +56,27 @@
 
 @if($user->role === 'super_admin')
 <p class="text" style="font-size:13px; color:#64748b;">
-  En tant que <strong>Super Administrateur</strong>, vous avez un acces complet a toutes les fonctionnalites :
-  gestion des entreprises, des utilisateurs, des modules Pointage RFID, Biometrique, Feelback et Marketplace.
+  En tant que <strong>Super Administrateur</strong>, vous avez un accès complet à toutes les fonctionnalités :
+  gestion des entreprises, des utilisateurs, des modules Pointage RFID, Biométrique, Feelback et Marketplace.
 </p>
 @elseif($user->role === 'admin_enterprise')
 <p class="text" style="font-size:13px; color:#64748b;">
   En tant qu'<strong>Administrateur Entreprise</strong>{{ $user->company ? ' de ' . $user->company->name : '' }},
-  vous gerez les sites, departements, employes, dispositifs et rapports de votre entreprise sur les modules
-  Pointage RFID, Biometrique, Feelback et Marketplace.
+  vous gérez les sites, départements, employés, dispositifs et rapports de votre entreprise sur les modules
+  Pointage RFID, Biométrique, Feelback et Marketplace.
 </p>
 @elseif($user->role === 'technicien')
 <p class="text" style="font-size:13px; color:#64748b;">
   En tant que <strong>Technicien</strong>{{ $user->company ? ' chez ' . $user->company->name : '' }},
-  vous etes charge de la mise en service des comptes clients : creation des entreprises, sites,
-  departements, employes, attribution des cartes RFID, enrolements biometriques, QR codes et
-  mises a jour firmware des terminaux.
+  vous êtes chargé de la mise en service des comptes clients : création des entreprises, sites,
+  départements, employés, attribution des cartes RFID, enrôlements biométriques, QR codes et
+  mises à jour firmware des terminaux.
 </p>
 @else
 <p class="text" style="font-size:13px; color:#64748b;">
   En tant que <strong>Manager</strong>{{ $user->company ? ' chez ' . $user->company->name : '' }},
-  vous avez acces aux tableaux de bord de pointage, aux rapports de presence et aux statistiques
-  de votre departement.
+  vous avez accès aux tableaux de bord de pointage, aux rapports de présence et aux statistiques
+  de votre département.
 </p>
 @endif
 @endsection
