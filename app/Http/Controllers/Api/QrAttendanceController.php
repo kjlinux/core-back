@@ -18,6 +18,8 @@ class QrAttendanceController extends BaseApiController
         $this->scopeByCompany($query);
 
         $query->when($request->input('date'), fn ($q, $v) => $q->whereDate('date', $v));
+        $query->when($request->input('start_date'), fn ($q, $v) => $q->whereDate('date', '>=', $v));
+        $query->when($request->input('end_date'), fn ($q, $v) => $q->whereDate('date', '<=', $v));
         $query->when($request->input('employee_id'), fn ($q, $v) => $q->where('employee_id', $v));
         $query->when($request->input('status'), fn ($q, $v) => $q->where('status', $v));
         $query->when($request->input('gps_verified'), fn ($q, $v) => $q->where('gps_verified', filter_var($v, FILTER_VALIDATE_BOOLEAN)));

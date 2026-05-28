@@ -16,6 +16,7 @@ use App\Models\OrderItem;
 use App\Models\RfidCard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends BaseApiController
 {
@@ -214,31 +215,52 @@ class DashboardController extends BaseApiController
         $isSuperAdmin = $user->isSuperAdmin();
         $companyId = $isSuperAdmin ? null : $this->resolveActiveCompanyId();
 
-        // Attendance trend — last 7 days
+        // Attendance trend — last 7 days (1 requête GROUP BY au lieu de 7)
+        $dateStart7 = now()->subDays(6)->toDateString();
+        $dateEnd7 = now()->toDateString();
+
+        $attBase = AttendanceRecord::whereBetween('date', [$dateStart7, $dateEnd7])
+            ->whereIn('status', ['present', 'late', 'left_early']);
+        if (! $isSuperAdmin) {
+            $attBase->whereHas('employee', fn ($sq) => $sq->where('company_id', $companyId));
+        }
+        $attByDay = $attBase->selectRaw('date, COUNT(*) as total')
+            ->groupBy('date')
+            ->pluck('total', 'date');
+
         $attendanceTrend = [];
         for ($i = 6; $i >= 0; $i--) {
-            $date = now()->subDays($i)->toDateString();
-            $label = now()->subDays($i)->locale('fr')->isoFormat('ddd D');
-            $q = AttendanceRecord::where('date', $date)->whereIn('status', ['present', 'late']);
-            if (! $isSuperAdmin) {
-                $q->whereHas('employee', fn ($sq) => $sq->where('company_id', $companyId));
-            }
-            $attendanceTrend[] = ['label' => $label, 'value' => $q->count()];
+            $day = now()->subDays($i);
+            $attendanceTrend[] = [
+                'label' => $day->locale('fr')->isoFormat('ddd D'),
+                'value' => (int) ($attByDay[$day->toDateString()] ?? 0),
+            ];
         }
 
-        // Satisfaction trend — last 7 days
+        // Satisfaction trend — last 7 days (2 requêtes GROUP BY au lieu de 14)
+        $feelBase = FeelbackEntry::whereDate('created_at', '>=', $dateStart7)
+            ->whereDate('created_at', '<=', $dateEnd7);
+        if (! $isSuperAdmin) {
+            $feelBase->whereHas('site', fn ($sq) => $sq->where('company_id', $companyId));
+        }
+        $feelTotals = (clone $feelBase)->selectRaw('DATE(created_at) as day, COUNT(*) as total')
+            ->groupByRaw('DATE(created_at)')
+            ->pluck('total', 'day');
+        $feelBons = (clone $feelBase)->where('level', 'bon')
+            ->selectRaw('DATE(created_at) as day, COUNT(*) as total')
+            ->groupByRaw('DATE(created_at)')
+            ->pluck('total', 'day');
+
         $satisfactionTrend = [];
         for ($i = 6; $i >= 0; $i--) {
-            $date = now()->subDays($i)->toDateString();
-            $label = now()->subDays($i)->locale('fr')->isoFormat('ddd D');
-            $q = FeelbackEntry::whereDate('created_at', $date);
-            if (! $isSuperAdmin) {
-                $q->whereHas('site', fn ($sq) => $sq->where('company_id', $companyId));
-            }
-            $total = (clone $q)->count();
-            $bon = (clone $q)->where('level', 'bon')->count();
-            $rate = $total > 0 ? round(($bon / $total) * 100, 1) : 0;
-            $satisfactionTrend[] = ['label' => $label, 'value' => $rate];
+            $day = now()->subDays($i);
+            $dayStr = $day->toDateString();
+            $total = (int) ($feelTotals[$dayStr] ?? 0);
+            $bon = (int) ($feelBons[$dayStr] ?? 0);
+            $satisfactionTrend[] = [
+                'label' => $day->locale('fr')->isoFormat('ddd D'),
+                'value' => $total > 0 ? round(($bon / $total) * 100, 1) : 0,
+            ];
         }
 
         // Attendance by department — today (une seule requete groupee, evite le N+1)

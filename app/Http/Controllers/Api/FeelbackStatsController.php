@@ -15,17 +15,13 @@ class FeelbackStatsController extends BaseApiController
         $user = $request->user();
 
         if ($user->isSuperAdmin()) {
-            $filterCompanyId = $request->input('company_id') ?: $this->resolveActiveCompanyId();
+            $filterCompanyId = $request->filled('company_id') ? $request->input('company_id') : null;
             if ($filterCompanyId) {
-                $query->whereHas('site', function ($q) use ($filterCompanyId) {
-                    $q->where('company_id', $filterCompanyId);
-                });
+                $query->whereHas('site', fn ($q) => $q->where('company_id', $filterCompanyId));
             }
         } else {
             $activeCompanyId = $this->resolveActiveCompanyId();
-            $query->whereHas('site', function ($q) use ($activeCompanyId) {
-                $q->where('company_id', $activeCompanyId);
-            });
+            $query->whereHas('site', fn ($q) => $q->where('company_id', $activeCompanyId));
         }
 
         if ($request->filled('start_date')) {
@@ -109,7 +105,7 @@ class FeelbackStatsController extends BaseApiController
         $siteQuery = Site::query();
 
         if ($user->isSuperAdmin()) {
-            $filterCompanyId = $request->input('company_id') ?: $this->resolveActiveCompanyId();
+            $filterCompanyId = $request->filled('company_id') ? $request->input('company_id') : null;
             if ($filterCompanyId) {
                 $siteQuery->where('company_id', $filterCompanyId);
             }

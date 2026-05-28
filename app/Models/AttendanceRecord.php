@@ -18,6 +18,7 @@ class AttendanceRecord extends Model
         'status',
         'late_minutes',
         'early_departure_minutes',
+        'overtime_minutes',
         'source',
         'is_double_badge',
         'notes',
@@ -29,6 +30,7 @@ class AttendanceRecord extends Model
         'exit_time' => 'datetime',
         'late_minutes' => 'integer',
         'early_departure_minutes' => 'integer',
+        'overtime_minutes' => 'integer',
         'is_double_badge' => 'boolean',
     ];
 

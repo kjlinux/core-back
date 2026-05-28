@@ -15,7 +15,7 @@ class AttendanceReportController extends BaseApiController
         $request->validate([
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
-            'type' => 'nullable|string|in:daily,weekly,monthly,late,absence,employee',
+            'type' => 'nullable|string|in:daily,monthly,late,absence',
             'company_id' => 'nullable|string|exists:companies,id',
             'site_id' => 'nullable|string|exists:sites,id',
             'department_id' => 'nullable|string|exists:departments,id',
@@ -43,17 +43,21 @@ class AttendanceReportController extends BaseApiController
             if (!$employee) return null;
 
             $totalDays = $employeeRecords->count();
-            $presentDays = $employeeRecords->where('status', 'present')->count();
+            // left_early = présent mais parti avant la fin — compté comme présent
+            $presentDays = $employeeRecords->whereIn('status', ['present', 'left_early'])->count();
             $absentDays = $employeeRecords->where('status', 'absent')->count();
             $lateDays = $employeeRecords->where('status', 'late')->count();
 
-            // Calculate overtime hours (time after schedule end)
-            $overtimeMinutes = $employeeRecords->sum('early_departure_minutes');
+            // Overtime = minutes worked beyond scheduled end time
+            $overtimeMinutes = $employeeRecords->sum('overtime_minutes');
             $overtime = $overtimeMinutes > 0 ? round($overtimeMinutes / 60, 1) : 0;
 
+            // Taux de présence = (présent + retard + parti tôt) / total jours
+            // Un employé en retard est bien venu — il ne doit pas baisser son taux de présence
+            $attendedDays = $presentDays + $lateDays;
             $rate = $totalDays > 0
-                ? round(($presentDays / $totalDays) * 100, 1) . '%'
-                : '0%';
+                ? round(($attendedDays / $totalDays) * 100, 1)
+                : 0.0;
 
             return [
                 'employeeId' => (string) $employee->id,

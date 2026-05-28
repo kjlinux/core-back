@@ -83,8 +83,20 @@ class PayrollService
             return Carbon::parse($r->entry_time)->diffInMinutes(Carbon::parse($r->exit_time)) / 60;
         });
 
-        // Calcul des absences (jours ouvrables - jours pointes)
-        $absentDays = max(0, $workingDays - $workedDays);
+        // Calcul des absences : pro-rata si l'employé a rejoint en cours de période
+        $hiredAt = $employee->created_at ? Carbon::parse($employee->created_at)->startOfDay() : null;
+        if ($hiredAt && $hiredAt->gt($end)) {
+            // Employé embauché après la fin de période — aucun jour ouvrable attendu
+            $absentDays = 0;
+        } elseif ($hiredAt && $hiredAt->gt($start)) {
+            // Proportionnel : jours_employé_dans_période / jours_totaux_période × workingDays
+            $totalPeriodDays = $start->diffInDays($end) + 1;
+            $employeeDaysInPeriod = $hiredAt->diffInDays($end) + 1;
+            $effectiveWorkingDays = (int) round($workingDays * $employeeDaysInPeriod / $totalPeriodDays);
+            $absentDays = max(0, $effectiveWorkingDays - $workedDays);
+        } else {
+            $absentDays = max(0, $workingDays - $workedDays);
+        }
 
         // Calcul des retards en minutes
         $totalLatenessMinutes = $records->sum(function ($r) {
@@ -101,14 +113,15 @@ class PayrollService
             default => $baseSalary,
         };
 
-        // Heures supplementaires
+        // Heures supplementaires (uniquement pour mode horaire, overtimeRate doit être > 1.0)
         $overtimeHours = 0.0;
         $overtimeAmount = 0;
-        if ($config?->overtime_enabled && $paymentMode === 'hourly') {
+        $overtimeRate = $config?->overtime_rate ?? 1.0;
+        if ($config?->overtime_enabled && $paymentMode === 'hourly' && $overtimeRate > 1.0) {
             $standardHours = $workingDays * $dailyHours;
             $overtimeHours = max(0, $workedHours - $standardHours);
             $hourlyRate = $baseSalary;
-            $overtimeAmount = (int) round($overtimeHours * $hourlyRate * ($config->overtime_rate - 1));
+            $overtimeAmount = (int) round($overtimeHours * $hourlyRate * ($overtimeRate - 1));
             $grossAmount += $overtimeAmount;
         }
 
@@ -152,7 +165,9 @@ class PayrollService
                 'overtime_amount' => $overtimeAmount,
                 'lateness_deduction' => $latenessDeduction,
                 'absence_deduction' => $absenceDeduction,
-                'lines' => [],
+                'lines' => $this->buildPayslipLines(
+                    $grossAmount, $paymentMode, $overtimeAmount, $absenceDeduction, $latenessDeduction
+                ),
                 'gross_amount' => $grossAmount,
                 'net_amount' => $netAmount,
                 'status' => 'draft',
@@ -166,6 +181,40 @@ class PayrollService
         return $payslip;
     }
 
+    private function buildPayslipLines(
+        int $grossAmount,
+        string $paymentMode,
+        int $overtimeAmount,
+        int $absenceDeduction,
+        int $latenessDeduction,
+    ): array {
+        // Pour les modes horaires/journaliers, le brut de base est différent du taux unitaire
+        $baseLabel = match ($paymentMode) {
+            'hourly'  => 'Salaire (taux horaire × heures)',
+            'daily'   => 'Salaire (taux journalier × jours)',
+            'weekly'  => 'Salaire (taux hebdomadaire × semaines)',
+            default   => 'Salaire de base',
+        };
+        // Le brut avant heures sup est : grossAmount - overtimeAmount
+        $baseEarning = $grossAmount - $overtimeAmount;
+
+        $lines = [
+            ['label' => $baseLabel, 'type' => 'earning', 'amount' => $baseEarning],
+        ];
+
+        if ($overtimeAmount > 0) {
+            $lines[] = ['label' => 'Heures supplémentaires', 'type' => 'earning', 'amount' => $overtimeAmount];
+        }
+        if ($absenceDeduction > 0) {
+            $lines[] = ['label' => 'Déduction absences', 'type' => 'deduction', 'amount' => $absenceDeduction];
+        }
+        if ($latenessDeduction > 0) {
+            $lines[] = ['label' => 'Déduction retards', 'type' => 'deduction', 'amount' => $latenessDeduction];
+        }
+
+        return $lines;
+    }
+
     /**
      * Calcule la deduction totale pour retards selon les regles configurees.
      */
@@ -177,9 +226,6 @@ class PayrollService
         Collection $rules,
     ): int {
         $deduction = 0;
-        $hourlyRate = $workingDays > 0 && $dailyHours > 0
-            ? $baseSalary / ($workingDays * $dailyHours)
-            : 0;
 
         foreach ($rules as $rule) {
             // Ignorer si en-dessous du seuil de tolerance
