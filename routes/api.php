@@ -42,12 +42,17 @@ use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\SiteController;
 use App\Http\Controllers\Api\Support\HealthController as SupportHealthController;
 use App\Http\Controllers\Api\Support\SupportController;
+use App\Http\Controllers\Api\SupportTicketController;
 use App\Http\Controllers\Api\TechnicienActivityController;
+use App\Http\Controllers\Api\TechnicienReportController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
 // Firmware version check — appelee par les capteurs ESP32 (sans auth)
 Route::get('/firmware/version.json', [FirmwareController::class, 'latestVersion']);
+
+// Verification publique d'un rapport technicien signe — accessible sans auth (QR code dans le PDF).
+Route::get('/technicien-reports/{id}/verify', [TechnicienReportController::class, 'verify']);
 
 // Public routes (sans auth)
 Route::prefix('public')->group(function () {
@@ -149,7 +154,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Admin orders + reports
         Route::get('/admin/orders', [AdminOrderController::class, 'index']);
-        Route::middleware('plan:garantie,premium')->get('/admin/reports/sales', [AdminSalesReportController::class, 'index']);
+        Route::middleware(['plan:garantie,premium', 'log.report:sales'])->get('/admin/reports/sales', [AdminSalesReportController::class, 'index']);
+        Route::middleware(['plan:garantie,premium', 'log.report:sales-csv'])->get('/admin/reports/sales/export.csv', [AdminSalesReportController::class, 'exportCsv']);
+        Route::middleware(['plan:garantie,premium', 'log.report:sales-pdf'])->get('/admin/reports/sales/export.pdf', [AdminSalesReportController::class, 'exportPdf']);
 
         // MQTT
         Route::post('/mqtt/test', [MqttController::class, 'testConnection']);
@@ -270,6 +277,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/schedules', [ScheduleController::class, 'index']);
     Route::get('/schedules/{id}', [ScheduleController::class, 'show']);
 
+    // Absence requests (lecture + soumission/edition par employe)
+    Route::get('/absence-requests', [\App\Http\Controllers\Api\AbsenceRequestController::class, 'index']);
+    Route::get('/absence-requests/my', [\App\Http\Controllers\Api\AbsenceRequestController::class, 'myRequests']);
+    Route::get('/absence-requests/{id}', [\App\Http\Controllers\Api\AbsenceRequestController::class, 'show']);
+    Route::post('/absence-requests', [\App\Http\Controllers\Api\AbsenceRequestController::class, 'store']);
+    Route::put('/absence-requests/{id}', [\App\Http\Controllers\Api\AbsenceRequestController::class, 'update']);
+    Route::patch('/absence-requests/{id}/review', [\App\Http\Controllers\Api\AbsenceRequestController::class, 'review']);
+    Route::delete('/absence-requests/{id}', [\App\Http\Controllers\Api\AbsenceRequestController::class, 'destroy']);
+
     // Holidays (lecture)
     Route::get('/holidays', [HolidayController::class, 'index']);
 
@@ -280,7 +296,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/attendance/department/{departmentId}', [AttendanceController::class, 'byDepartment']);
     Route::get('/attendance/summary', [AttendanceController::class, 'summary']);
     Route::get('/attendance/biometric', [AttendanceController::class, 'biometric']);
-    Route::get('/attendance/reports', [AttendanceReportController::class, 'index']);
+    Route::middleware('log.report:attendance')->get('/attendance/reports', [AttendanceReportController::class, 'index']);
+    Route::middleware('log.report:attendance-csv')->get('/attendance/reports/export.csv', [AttendanceReportController::class, 'exportCsv']);
+    Route::middleware('log.report:attendance-pdf')->get('/attendance/reports/export.pdf', [AttendanceReportController::class, 'exportPdf']);
 
     // Biometric (lecture)
     Route::get('/biometric/devices', [BiometricDeviceController::class, 'index']);
@@ -293,7 +311,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Feelback + Marketplace (lecture) - technicien n'y a pas acces
     Route::middleware('role:super_admin,admin_enterprise,manager')->group(function () {
         Route::get('/feelback/review-config', [ReviewConfigController::class, 'show']);
-        Route::get('/feelback/review-stats', [ReviewStatsController::class, 'index']);
+        Route::middleware('log.report:review-stats')->get('/feelback/review-stats', [ReviewStatsController::class, 'index']);
         Route::get('/feelback/review-submissions', [ReviewStatsController::class, 'submissions']);
         Route::get('/feelback/stats', [FeelbackStatsController::class, 'index']);
         Route::get('/feelback/entries', [FeelbackEntryController::class, 'index']);
@@ -302,7 +320,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/feelback/alerts', [FeelbackAlertController::class, 'index']);
         Route::get('/feelback/stats/agency/{agencyId}', [FeelbackStatsController::class, 'byAgency']);
         Route::get('/feelback/comparison', [FeelbackStatsController::class, 'comparison']);
-        Route::get('/feelback/reports', [FeelbackReportController::class, 'index']);
+        Route::middleware('log.report:feelback')->get('/feelback/reports', [FeelbackReportController::class, 'index']);
+        Route::middleware('log.report:feelback-csv')->get('/feelback/reports/export.csv', [FeelbackReportController::class, 'exportCsv']);
+        Route::middleware('log.report:feelback-pdf')->get('/feelback/reports/export.pdf', [FeelbackReportController::class, 'exportPdf']);
 
         // Marketplace products (lecture)
         Route::get('/marketplace/products', [ProductController::class, 'index']);
@@ -355,6 +375,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::middleware('plan:garantie,premium')->post('/firmware/trigger-company-update', [FirmwareController::class, 'triggerCompanyUpdate']);
         Route::get('/firmware/company-update-progress', [FirmwareController::class, 'companyUpdateProgress']);
         Route::middleware('plan:garantie,premium')->post('/firmware/retry-failed', [FirmwareController::class, 'retryFailed']);
+        Route::middleware('plan:garantie,premium')->post('/firmware/retry-pending', [FirmwareController::class, 'retryPending']);
 
         // Ecriture : super_admin + technicien seulement
         Route::middleware('role:super_admin,technicien')->group(function () {
@@ -374,6 +395,22 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
     Route::get('/dashboard/trends', [DashboardController::class, 'trends']);
     Route::get('/dashboard/charts', [DashboardController::class, 'charts']);
+
+    // Audit log des rapports — accessible aux admins (scoped par company).
+    Route::middleware('role:super_admin,admin_enterprise')
+        ->get('/reports/audit-log', [\App\Http\Controllers\Api\ReportAuditLogController::class, 'index']);
+
+    // Planification d'envoi automatique de rapports — admins.
+    Route::middleware('role:super_admin,admin_enterprise')->group(function () {
+        Route::get('/reports/schedules', [\App\Http\Controllers\Api\ReportScheduleController::class, 'index']);
+        Route::post('/reports/schedules', [\App\Http\Controllers\Api\ReportScheduleController::class, 'store']);
+        Route::patch('/reports/schedules/{id}', [\App\Http\Controllers\Api\ReportScheduleController::class, 'update']);
+        Route::delete('/reports/schedules/{id}', [\App\Http\Controllers\Api\ReportScheduleController::class, 'destroy']);
+    });
+
+    // Signature numerique des rapports techniciens.
+    Route::middleware('role:super_admin,technicien')
+        ->post('/technicien-reports', [TechnicienReportController::class, 'store']);
 
     // =============================================
     // Activites techniciens
@@ -424,11 +461,25 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/devices', [SupportController::class, 'devices']);
         Route::get('/devices/{kind}/{id}', [SupportController::class, 'deviceDetail']);
         Route::post('/devices/{kind}/{id}/ping', [SupportController::class, 'pingDevice']);
+        Route::post('/devices/{kind}/{id}/command', [SupportController::class, 'sendCommand']);
+        Route::get('/companies', [SupportController::class, 'companies']);
+        Route::get('/companies/{id}', [SupportController::class, 'companyDetail']);
+        Route::post('/users/{id}/reset-password', [SupportController::class, 'resetUserPassword']);
         Route::get('/witnesses', [SupportController::class, 'listWitnesses']);
         Route::post('/witnesses/{kind}/{id}', [SupportController::class, 'markWitness']);
         Route::delete('/witnesses/{kind}/{id}', [SupportController::class, 'unmarkWitness']);
         Route::get('/alerts', [SupportController::class, 'alerts']);
         Route::post('/alerts/{id}/acknowledge', [SupportController::class, 'acknowledgeAlert']);
         Route::post('/alerts/{id}/resolve', [SupportController::class, 'resolveAlert']);
+        Route::get('/tickets', [SupportTicketController::class, 'supportIndex']);
+        Route::patch('/tickets/{id}', [SupportTicketController::class, 'supportUpdate']);
+    });
+
+    // =============================================
+    // Plaintes / tickets cote client (admin_enterprise + manager)
+    // =============================================
+    Route::middleware('role:admin_enterprise,manager')->prefix('client')->group(function () {
+        Route::get('/tickets', [SupportTicketController::class, 'clientIndex']);
+        Route::post('/tickets', [SupportTicketController::class, 'clientStore']);
     });
 });

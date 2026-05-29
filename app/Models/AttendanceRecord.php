@@ -22,6 +22,9 @@ class AttendanceRecord extends Model
         'source',
         'is_double_badge',
         'notes',
+        'expected_shift',
+        'segments',
+        'is_on_leave',
     ];
 
     protected $casts = [
@@ -32,6 +35,8 @@ class AttendanceRecord extends Model
         'early_departure_minutes' => 'integer',
         'overtime_minutes' => 'integer',
         'is_double_badge' => 'boolean',
+        'is_on_leave' => 'boolean',
+        'segments' => 'array',
     ];
 
     public function employee(): BelongsTo

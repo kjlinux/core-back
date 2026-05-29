@@ -58,7 +58,9 @@ class DashboardController extends BaseApiController
         if (! $isSuperAdmin) {
             $orderQuery->where('company_id', $companyId);
         }
-        $rfidCardsSold = $isSuperAdmin
+        // Si super_admin SANS company active sélectionnée → total global.
+        // Sinon (admin entreprise, ou super_admin avec company active) → scopé via orderQuery déjà filtré.
+        $rfidCardsSold = ($isSuperAdmin && ! $companyId)
             ? OrderItem::sum('quantity')
             : OrderItem::whereIn('order_id', (clone $orderQuery)->pluck('id'))->sum('quantity');
 
@@ -79,10 +81,12 @@ class DashboardController extends BaseApiController
         $presentToday = (clone $attendanceQuery)->where('status', 'present')->count();
         $lateToday = (clone $attendanceQuery)->where('status', 'late')->count();
         $absentToday = (clone $attendanceQuery)->where('status', 'absent')->count();
+        $leftEarlyToday = (clone $attendanceQuery)->where('status', 'left_early')->count();
 
-        $totalForRate = $presentToday + $lateToday + $absentToday;
+        // left_early = présent ce jour mais parti tôt → compte comme présence (numérateur + dénominateur).
+        $totalForRate = $presentToday + $lateToday + $absentToday + $leftEarlyToday;
         $attendanceRate = $totalForRate > 0
-            ? round((($presentToday + $lateToday) / $totalForRate) * 100, 1)
+            ? round((($presentToday + $lateToday + $leftEarlyToday) / $totalForRate) * 100, 1)
             : 0;
 
         // Orders
@@ -286,17 +290,25 @@ class DashboardController extends BaseApiController
             ->values()
             ->toArray();
 
-        // Revenue monthly — last 6 months (super admin only)
+        // Revenue monthly — last 6 months (super admin only) — une seule requête groupée.
         $revenueMonthly = [];
         if ($isSuperAdmin) {
+            $from = now()->subMonths(5)->startOfMonth();
+            $monthExpr = DB::getDriverName() === 'pgsql'
+                ? "TO_CHAR(created_at, 'YYYY-MM')"
+                : "DATE_FORMAT(created_at, '%Y-%m')";
+
+            $revenueByMonth = Order::where('payment_status', 'paid')
+                ->where('created_at', '>=', $from)
+                ->selectRaw("$monthExpr as ym, SUM(total) as revenue")
+                ->groupBy('ym')
+                ->pluck('revenue', 'ym');
+
             for ($i = 5; $i >= 0; $i--) {
                 $month = now()->subMonths($i);
+                $key = $month->format('Y-m');
                 $label = $month->locale('fr')->isoFormat('MMM YY');
-                $revenue = Order::where('payment_status', 'paid')
-                    ->whereYear('created_at', $month->year)
-                    ->whereMonth('created_at', $month->month)
-                    ->sum('total');
-                $revenueMonthly[] = ['label' => $label, 'value' => (float) $revenue];
+                $revenueMonthly[] = ['label' => $label, 'value' => (float) ($revenueByMonth[$key] ?? 0)];
             }
         }
 

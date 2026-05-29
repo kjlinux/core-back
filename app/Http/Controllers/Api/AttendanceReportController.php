@@ -4,13 +4,72 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
+use App\Support\CsvExporter;
+use App\Support\ReportPdfRenderer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AttendanceReportController extends BaseApiController
 {
     public function index(Request $request): JsonResponse
+    {
+        $report = $this->buildReport($request);
+        return $this->successResponse($report);
+    }
+
+    public function exportCsv(Request $request): StreamedResponse
+    {
+        $report = $this->buildReport($request);
+        $headers = ['Matricule', 'Employe', 'Departement', 'Site', 'Presents', 'Absents', 'Retards', 'Heures sup.', 'Taux (%)'];
+        $rows = array_map(fn ($r) => [
+            $r['employeeId'],
+            $r['employee'],
+            $r['department'],
+            $r['site'],
+            $r['present'],
+            $r['absent'],
+            $r['late'],
+            $r['overtime'],
+            $r['rate'],
+        ], $report['rows']);
+
+        $filename = sprintf(
+            'rapport-presence_%s_%s_au_%s.csv',
+            $request->input('type', 'daily'),
+            $request->input('start_date'),
+            $request->input('end_date'),
+        );
+
+        return CsvExporter::stream($filename, $headers, $rows);
+    }
+
+    public function exportPdf(Request $request): Response
+    {
+        $report = $this->buildReport($request);
+        $headers = ['Matricule', 'Employe', 'Departement', 'Site', 'Presents', 'Absents', 'Retards', 'Heures sup.', 'Taux (%)'];
+        $rows = array_map(fn ($r) => [
+            $r['employeeId'], $r['employee'], $r['department'], $r['site'],
+            $r['present'], $r['absent'], $r['late'], $r['overtime'], $r['rate'],
+        ], $report['rows']);
+
+        $summary = [
+            ['label' => 'Employes', 'value' => $report['totalEmployees']],
+            ['label' => 'Presents', 'value' => $report['totalPresent']],
+            ['label' => 'Absents', 'value' => $report['totalAbsent']],
+            ['label' => 'Retards', 'value' => $report['totalLate']],
+        ];
+
+        $subtitle = sprintf('Du %s au %s', $request->input('start_date'), $request->input('end_date'));
+        $pdf = ReportPdfRenderer::render('Rapport de presence', $headers, $rows, $summary, $subtitle);
+
+        $filename = sprintf('rapport-presence_%s_au_%s.pdf', $request->input('start_date'), $request->input('end_date'));
+        return $pdf->download($filename);
+    }
+
+    private function buildReport(Request $request): array
     {
         $request->validate([
             'start_date' => 'required|date',
@@ -25,19 +84,16 @@ class AttendanceReportController extends BaseApiController
         $endDate = $request->input('end_date');
         $type = $request->input('type', 'daily');
 
-        // Build employee query with location filters
         $employeeQuery = Employee::where('is_active', true);
         $this->applyEmployeeFilters($employeeQuery, $request);
         $employeeIds = $employeeQuery->pluck('id');
 
-        // Build attendance query
         $attendanceQuery = AttendanceRecord::with(['employee.department', 'employee.site'])
             ->whereIn('employee_id', $employeeIds)
             ->whereBetween('date', [$startDate, $endDate]);
 
         $records = $attendanceQuery->get();
 
-        // Group records by employee
         $rows = $records->groupBy('employee_id')->map(function ($employeeRecords) {
             $employee = $employeeRecords->first()->employee;
             if (!$employee) return null;
@@ -84,13 +140,13 @@ class AttendanceReportController extends BaseApiController
         $totalAbsent = array_sum(array_column($rows, 'absent'));
         $totalLate = array_sum(array_column($rows, 'late'));
 
-        return $this->successResponse([
+        return [
             'totalEmployees' => count($rows),
             'totalPresent' => $totalPresent,
             'totalAbsent' => $totalAbsent,
             'totalLate' => $totalLate,
             'rows' => $rows,
-        ]);
+        ];
     }
 
     private function applyEmployeeFilters($query, Request $request): void

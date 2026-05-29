@@ -17,6 +17,7 @@ class StoreEmployeeRequest extends FormRequest
             'company_id' => ['required', 'exists:companies,id'],
             'site_id' => ['required', 'exists:sites,id'],
             'department_id' => ['required', 'exists:departments,id'],
+            'schedule_id' => ['nullable', 'exists:schedules,id'],
             'first_name' => ['required', 'string'],
             'last_name' => ['required', 'string'],
             'email' => ['required', 'email'],

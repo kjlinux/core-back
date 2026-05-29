@@ -20,6 +20,7 @@ class DeviceAlert extends Model
     public const SEVERITY_CRITICAL = 'critical';
 
     public const TYPE_OFFLINE_THRESHOLD = 'offline_threshold';
+    public const TYPE_PROLONGED_OFFLINE = 'prolonged_offline';
     public const TYPE_OTA_FAILED = 'ota_failed';
     public const TYPE_BROKER_DOWN = 'broker_down';
     public const TYPE_REVERB_DOWN = 'reverb_down';

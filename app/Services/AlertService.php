@@ -34,7 +34,7 @@ class AlertService
             'status' => DeviceAlert::STATUS_OPEN,
         ], $attributes));
 
-        event(new DeviceAlertCreated($alert));
+        $this->safeBroadcast(fn () => event(new DeviceAlertCreated($alert)));
         $this->notifySupport($alert);
 
         return $alert;
@@ -49,8 +49,17 @@ class AlertService
             'status' => DeviceAlert::STATUS_RESOLVED,
             'resolved_at' => now(),
         ]);
-        event(new DeviceAlertResolved($alert));
+        $this->safeBroadcast(fn () => event(new DeviceAlertResolved($alert)));
         return $alert;
+    }
+
+    protected function safeBroadcast(callable $fn): void
+    {
+        try {
+            $fn();
+        } catch (\Throwable $e) {
+            Log::warning('[AlertService] broadcast échoué (serveur temps réel injoignable ?): ' . $e->getMessage());
+        }
     }
 
     public function resolveByDevice(string $deviceKind, string $deviceId, ?string $type = null): void

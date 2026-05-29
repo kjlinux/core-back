@@ -5,12 +5,17 @@ namespace App\Http\Controllers\Api;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Http\Resources\AttendanceRecordResource;
+use App\Services\AttendanceEvaluationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class AttendanceController extends BaseApiController
 {
+    public function __construct(protected AttendanceEvaluationService $evaluator)
+    {
+    }
+
     /**
      * Get attendance records for a specific date with stats.
      */
@@ -31,7 +36,7 @@ class AttendanceController extends BaseApiController
 
         $this->applyLocationFilters($query, $request);
 
-        $records = $query->get();
+        $records = $this->evaluator->enrichRecords($query->get());
 
         $employeeQuery = Employee::where('is_active', true);
         $user = $request->user();
@@ -79,7 +84,7 @@ class AttendanceController extends BaseApiController
 
         $this->applyLocationFilters($query, $request);
 
-        $records = $query->get();
+        $records = $this->evaluator->enrichRecords($query->get());
 
         $summaries = $records->groupBy('employee_id')->map(function ($employeeRecords) {
             $employee = $employeeRecords->first()->employee;
@@ -129,11 +134,13 @@ class AttendanceController extends BaseApiController
             }
         }
 
-        $records = AttendanceRecord::with('employee.department')
-            ->where('employee_id', $employeeId)
-            ->whereBetween('date', [$request->input('start_date'), $request->input('end_date')])
-            ->orderBy('date', 'desc')
-            ->get();
+        $records = $this->evaluator->enrichRecords(
+            AttendanceRecord::with('employee.department')
+                ->where('employee_id', $employeeId)
+                ->whereBetween('date', [$request->input('start_date'), $request->input('end_date')])
+                ->orderBy('date', 'desc')
+                ->get()
+        );
 
         return $this->successResponse(AttendanceRecordResource::collection($records));
     }
@@ -164,11 +171,13 @@ class AttendanceController extends BaseApiController
 
         $employeeIds = Employee::where('department_id', $departmentId)->pluck('id');
 
-        $records = AttendanceRecord::with('employee.department')
-            ->whereIn('employee_id', $employeeIds)
-            ->whereBetween('date', [$request->input('start_date'), $request->input('end_date')])
-            ->orderBy('date', 'desc')
-            ->get();
+        $records = $this->evaluator->enrichRecords(
+            AttendanceRecord::with('employee.department')
+                ->whereIn('employee_id', $employeeIds)
+                ->whereBetween('date', [$request->input('start_date'), $request->input('end_date')])
+                ->orderBy('date', 'desc')
+                ->get()
+        );
 
         return $this->successResponse(AttendanceRecordResource::collection($records));
     }
@@ -191,7 +200,7 @@ class AttendanceController extends BaseApiController
 
         $this->applyLocationFilters($query, $request);
 
-        $records = $query->get();
+        $records = $this->evaluator->enrichRecords($query->get());
 
         $totalRecords = $records->count();
         $presentCount = $records->whereIn('status', ['present', 'late', 'left_early'])->count();
@@ -246,7 +255,7 @@ class AttendanceController extends BaseApiController
 
         $this->applyLocationFilters($query, $request);
 
-        $records = $query->get();
+        $records = $this->evaluator->enrichRecords($query->get());
 
         $employeeQuery = Employee::where('is_active', true);
         $user = $request->user();

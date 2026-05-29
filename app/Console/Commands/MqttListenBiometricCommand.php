@@ -89,11 +89,6 @@ class MqttListenBiometricCommand extends Command
             $this->processMessage($topic, $message);
         }, MqttClient::QOS_AT_LEAST_ONCE);
 
-        // Ecoute les réponses OTA des terminaux biométriques
-        $this->mqtt->subscribe('devices/+/ota/response', function (string $topic, string $message) {
-            $this->processOtaResponse($topic, $message);
-        }, MqttClient::QOS_AT_LEAST_ONCE);
-
         $this->mqtt->registerLoopEventHandler(function () {
             static $lastHeartbeat = 0;
             $now = time();
@@ -121,25 +116,26 @@ class MqttListenBiometricCommand extends Command
         $serialNumber = $parts[3] ?? null;
         $responseTopic = str_replace('/event', '/response', $topic);
 
-        // Find device and update status
         $device = BiometricDevice::where('serial_number', $serialNumber)->first();
-        if ($device) {
-            $device->update([
-                'is_online' => true,
-                'last_sync_at' => now(),
-            ]);
+
+        // Reponse OTA traitee en premier : l'ESP32 publie
+        // {event:"ota_result",log_id,success,version,error}. On evite ainsi de
+        // re-pousser via le retry la version qui vient justement de se terminer.
+        if (($data['event'] ?? null) === 'ota_result') {
+            $this->processOtaResponse($data, $serialNumber);
+
+            return;
         }
 
-        // Handle status action
+        // Mark online et relancer une OTA en attente si le terminal se reconnecte
+        if ($device) {
+            $this->markOnlineAndRetryOta($device, $data);
+        }
+
+        // Handle status action (device deja marque online + retry OTA ci-dessus)
         if (isset($data['action']) && $data['action'] === 'status') {
             $this->info("Status update du capteur {$serialNumber}");
             if ($device) {
-                $updateData = ['is_online' => true, 'last_sync_at' => now()];
-                // Synchroniser la version firmware si le terminal la reporte
-                if (! empty($data['firmware_version'])) {
-                    $updateData['firmware_version'] = $data['firmware_version'];
-                }
-                $device->update($updateData);
                 event(new DeviceStatusUpdated('biometric', (string) $device->id, 'online', $data));
             }
 
@@ -342,22 +338,14 @@ class MqttListenBiometricCommand extends Command
         }
     }
 
-    private function processOtaResponse(string $topic, string $message): void
+    private function processOtaResponse(array $data, ?string $serial): void
     {
-        $this->info("Reponse OTA recue sur {$topic}: {$message}");
-
-        $data = json_decode($message, true);
-        if (! $data) {
-            $this->warn('Reponse OTA invalide: JSON malformé');
-
-            return;
-        }
+        $this->info('Reponse OTA biometrique recue: '.json_encode($data));
 
         $logId = $data['log_id'] ?? null;
-        $success = $data['success'] ?? false;
+        $success = (bool) ($data['success'] ?? false);
         $version = $data['version'] ?? null;
         $errorMsg = $data['error'] ?? null;
-        $serial = explode('/', $topic)[1] ?? null;
 
         // Mettre à jour le log OTA
         if ($logId) {
@@ -379,6 +367,83 @@ class MqttListenBiometricCommand extends Command
             BiometricDevice::where('serial_number', $serial)
                 ->update(['firmware_version' => $version]);
             $this->info("Firmware biometrique {$serial} mis a jour vers {$version}");
+        }
+    }
+
+    /**
+     * Marque le terminal en ligne et, s'il vient de se reconnecter, relance
+     * toute mise a jour OTA restee en attente (terminal offline au moment du push).
+     */
+    private function markOnlineAndRetryOta(BiometricDevice $device, array $data): void
+    {
+        $wasOffline = ! $device->is_online;
+
+        $updateData = ['is_online' => true, 'last_sync_at' => now()];
+        if (! empty($data['firmware_version'])) {
+            $updateData['firmware_version'] = $data['firmware_version'];
+        }
+        $device->update($updateData);
+
+        if ($wasOffline) {
+            $this->retryPendingOtaUpdates($device);
+        }
+    }
+
+    /**
+     * Republie l'ordre OTA pour les logs encore en attente de ce terminal.
+     * Le push MQTT initial (QoS 0) est perdu si le terminal etait offline ;
+     * on rejoue donc l'ordre des qu'il se reconnecte. Inclut les logs passes
+     * en "failed" par timeout (offline) mais pas les vrais echecs de flash.
+     */
+    private function retryPendingOtaUpdates(BiometricDevice $device): void
+    {
+        if (empty($device->serial_number) || ! $this->mqtt) {
+            return;
+        }
+
+        $currentVersion = $device->firmware_version;
+
+        $logs = OtaUpdateLog::with('firmwareVersion')
+            ->where('device_id', $device->id)
+            ->where('device_kind', 'biometric')
+            ->where('started_at', '<', now()->subSeconds(30))
+            ->where(function ($q) {
+                $q->whereIn('status', ['pending', 'in_progress'])
+                  ->orWhere(function ($q2) {
+                      $q2->where('status', 'failed')
+                         ->where('error_message', 'like', 'Timeout%');
+                  });
+            })
+            ->orderByDesc('started_at')
+            ->get()
+            ->unique('firmware_version_id');
+
+        foreach ($logs as $log) {
+            $fw = $log->firmwareVersion;
+            if (! $fw || ! $fw->file_path) {
+                continue;
+            }
+
+            if ($currentVersion && $fw->version === $currentVersion) {
+                $log->update(['status' => 'success', 'completed_at' => now()]);
+                continue;
+            }
+
+            $fileUrl = rtrim(config('app.url'), '/').'/storage/'.$fw->file_path;
+            $topic = config('mqtt.topics.biometric').'/'.$device->serial_number.'/response';
+
+            try {
+                $this->mqtt->publish($topic, json_encode([
+                    'cmd' => '0x1080D0',
+                    'url' => $fileUrl,
+                    'version' => $fw->version,
+                    'log_id' => (string) $log->id,
+                ]), MqttClient::QOS_AT_LEAST_ONCE);
+                $log->update(['status' => 'in_progress']);
+                $this->info("[OTA retry] {$device->serial_number} -> {$fw->version}");
+            } catch (\Exception $e) {
+                $this->warn("[OTA retry] echec {$device->serial_number}: {$e->getMessage()}");
+            }
         }
     }
 }

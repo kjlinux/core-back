@@ -88,11 +88,6 @@ class MqttListenRfidCommand extends Command
             $this->processMessage($topic, $message);
         }, MqttClient::QOS_AT_LEAST_ONCE);
 
-        // Ecoute les réponses OTA des terminaux RFID
-        $this->mqtt->subscribe('devices/+/ota/response', function (string $topic, string $message) {
-            $this->processOtaResponse($topic, $message, 'rfid');
-        }, MqttClient::QOS_AT_LEAST_ONCE);
-
         // Heartbeat pour le HealthService (toutes les 30s via la boucle MQTT)
         $this->mqtt->registerLoopEventHandler(function () {
             static $lastHeartbeat = 0;
@@ -117,9 +112,26 @@ class MqttListenRfidCommand extends Command
             return;
         }
 
-        // Ignorer les messages de statut purs
+        // Reponse OTA : l'ESP32 publie {event:"ota_result",log_id,success,version,error}
+        // sur core/rfid/sensor/{serial}/event apres flash.
+        if (($data['event'] ?? null) === 'ota_result') {
+            $parts = explode('/', $topic);
+            $serial = $parts[3] ?? null;
+            $this->processOtaResponse($data, $serial);
+
+            return;
+        }
+
+        // Ignorer les messages de statut purs (ex: {"status":"online"}), mais en
+        // profiter pour marquer le terminal en ligne et relancer une OTA en attente
+        // si le terminal vient de se reconnecter.
         if (isset($data['status']) && ! isset($data['card_uid']) && ! isset($data['uid'])) {
-            $this->info('Message de statut ignoré');
+            $this->info('Message de statut');
+            $parts = explode('/', $topic);
+            $serial = $parts[3] ?? null;
+            if ($serial && ($device = RfidDevice::where('serial_number', $serial)->first())) {
+                $this->markOnlineAndRetryOta($device, $data);
+            }
 
             return;
         }
@@ -158,13 +170,7 @@ class MqttListenRfidCommand extends Command
             return;
         }
         if ($device) {
-            $updateData = ['is_online' => true, 'last_ping_at' => now()];
-            // Synchroniser la version firmware si le terminal la reporte
-            if (! empty($data['firmware_version'])) {
-                $updateData['firmware_version'] = $data['firmware_version'];
-            }
-            $device->update($updateData);
-            event(new DeviceStatusUpdated('rfid', (string) $device->id, 'online', $data));
+            $this->markOnlineAndRetryOta($device, $data);
         }
 
         $responseTopic = str_replace('/event', '/response', $topic);
@@ -268,22 +274,14 @@ class MqttListenRfidCommand extends Command
         $this->mqtt->publish($responseTopic, config('mqtt.response_codes.accepted'), MqttClient::QOS_AT_LEAST_ONCE);
     }
 
-    private function processOtaResponse(string $topic, string $message, string $deviceKind): void
+    private function processOtaResponse(array $data, ?string $serial): void
     {
-        $this->info("Reponse OTA recue sur {$topic}: {$message}");
-
-        $data = json_decode($message, true);
-        if (! $data) {
-            $this->warn('Reponse OTA invalide: JSON malformé');
-
-            return;
-        }
+        $this->info('Reponse OTA RFID recue: '.json_encode($data));
 
         $logId = $data['log_id'] ?? null;
-        $success = $data['success'] ?? false;
+        $success = (bool) ($data['success'] ?? false);
         $version = $data['version'] ?? null;
         $errorMsg = $data['error'] ?? null;
-        $serial = explode('/', $topic)[1] ?? null;
 
         // Mettre à jour le log OTA
         if ($logId) {
@@ -305,6 +303,88 @@ class MqttListenRfidCommand extends Command
             RfidDevice::where('serial_number', $serial)
                 ->update(['firmware_version' => $version]);
             $this->info("Firmware RFID {$serial} mis a jour vers {$version}");
+        }
+    }
+
+    /**
+     * Marque le terminal en ligne et, s'il vient de se reconnecter, relance
+     * toute mise a jour OTA restee en attente (terminal offline au moment du push).
+     */
+    private function markOnlineAndRetryOta(RfidDevice $device, array $data): void
+    {
+        $wasOffline = ! $device->is_online;
+
+        $updateData = ['is_online' => true, 'last_ping_at' => now()];
+        if (! empty($data['firmware_version'])) {
+            $updateData['firmware_version'] = $data['firmware_version'];
+        }
+        $device->update($updateData);
+        event(new DeviceStatusUpdated('rfid', (string) $device->id, 'online', $data));
+
+        if ($wasOffline) {
+            $this->retryPendingOtaUpdates($device);
+        }
+    }
+
+    /**
+     * Republie l'ordre OTA pour les logs encore en attente de ce terminal.
+     * Le push MQTT initial (QoS 0) est perdu si le terminal etait offline ;
+     * on rejoue donc l'ordre des qu'il se reconnecte.
+     */
+    private function retryPendingOtaUpdates(RfidDevice $device): void
+    {
+        if (empty($device->serial_number) || ! $this->mqtt) {
+            return;
+        }
+
+        // Si le terminal reporte deja sa version, ne pas rejouer une OTA vers
+        // une version egale ou anterieure.
+        $currentVersion = $device->firmware_version;
+
+        // pending/in_progress = push initial perdu (offline). On inclut aussi les
+        // logs passes en "failed" par firmware:fail-stuck-ota (timeout = terminal
+        // offline), mais PAS les vrais echecs de flash signales par le terminal.
+        $logs = OtaUpdateLog::with('firmwareVersion')
+            ->where('device_id', $device->id)
+            ->where('device_kind', 'rfid')
+            ->where('started_at', '<', now()->subSeconds(30))
+            ->where(function ($q) {
+                $q->whereIn('status', ['pending', 'in_progress'])
+                  ->orWhere(function ($q2) {
+                      $q2->where('status', 'failed')
+                         ->where('error_message', 'like', 'Timeout%');
+                  });
+            })
+            ->orderByDesc('started_at')
+            ->get()
+            ->unique('firmware_version_id');
+
+        foreach ($logs as $log) {
+            $fw = $log->firmwareVersion;
+            if (! $fw || ! $fw->file_path) {
+                continue;
+            }
+
+            if ($currentVersion && $fw->version === $currentVersion) {
+                $log->update(['status' => 'success', 'completed_at' => now()]);
+                continue;
+            }
+
+            $fileUrl = rtrim(config('app.url'), '/').'/storage/'.$fw->file_path;
+            $topic = 'core/rfid/sensor/'.$device->serial_number.'/response';
+
+            try {
+                $this->mqtt->publish($topic, json_encode([
+                    'cmd' => '0x1080D0',
+                    'url' => $fileUrl,
+                    'version' => $fw->version,
+                    'log_id' => (string) $log->id,
+                ]), MqttClient::QOS_AT_LEAST_ONCE);
+                $log->update(['status' => 'in_progress']);
+                $this->info("[OTA retry] {$device->serial_number} -> {$fw->version}");
+            } catch (\Exception $e) {
+                $this->warn("[OTA retry] echec {$device->serial_number}: {$e->getMessage()}");
+            }
         }
     }
 }

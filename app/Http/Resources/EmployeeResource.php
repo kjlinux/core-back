@@ -19,6 +19,7 @@ class EmployeeResource extends JsonResource
             'companyId' => (string) $this->company_id,
             'siteId' => (string) $this->site_id,
             'departmentId' => (string) $this->department_id,
+            'scheduleId' => $this->schedule_id ? (string) $this->schedule_id : null,
             'firstName' => $this->first_name,
             'lastName' => $this->last_name,
             'email' => $this->email,

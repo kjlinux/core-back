@@ -78,21 +78,26 @@ class TechnicienActivityController extends BaseApiController
             ->whereHas('activityLogs', fn($q) => $q->where('company_id', $companyId))
             ->get(['id', 'first_name', 'last_name', 'email']);
 
-        $summary = $techniciens->map(function (User $tech) use ($companyId) {
-            $logs = TechnicienActivityLog::where('technicien_id', $tech->id)
-                ->where('company_id', $companyId)
-                ->selectRaw('resource_type, action, count(*) as count')
-                ->groupBy('resource_type', 'action')
-                ->get();
+        $technicienIds = $techniciens->pluck('id');
 
-            $lastActivity = TechnicienActivityLog::where('technicien_id', $tech->id)
-                ->where('company_id', $companyId)
-                ->latest()
-                ->value('created_at');
+        // 3 requêtes globales (au lieu de 3 × N).
+        $breakdowns = TechnicienActivityLog::where('company_id', $companyId)
+            ->whereIn('technicien_id', $technicienIds)
+            ->selectRaw('technicien_id, resource_type, action, count(*) as count')
+            ->groupBy('technicien_id', 'resource_type', 'action')
+            ->get()
+            ->groupBy('technicien_id');
 
-            $totalActions = TechnicienActivityLog::where('technicien_id', $tech->id)
-                ->where('company_id', $companyId)
-                ->count();
+        $totals = TechnicienActivityLog::where('company_id', $companyId)
+            ->whereIn('technicien_id', $technicienIds)
+            ->selectRaw('technicien_id, count(*) as total, max(created_at) as last_at')
+            ->groupBy('technicien_id')
+            ->get()
+            ->keyBy('technicien_id');
+
+        $summary = $techniciens->map(function (User $tech) use ($breakdowns, $totals) {
+            $row = $totals[$tech->id] ?? null;
+            $logs = $breakdowns[$tech->id] ?? collect();
 
             return [
                 'technicien' => [
@@ -100,13 +105,13 @@ class TechnicienActivityController extends BaseApiController
                     'fullName'  => trim($tech->first_name . ' ' . $tech->last_name),
                     'email'     => $tech->email,
                 ],
-                'totalActions'  => $totalActions,
-                'lastActivity'  => $lastActivity,
-                'breakdown'     => $logs->map(fn($l) => [
+                'totalActions'  => $row ? (int) $row->total : 0,
+                'lastActivity'  => $row?->last_at,
+                'breakdown'     => $logs->map(fn ($l) => [
                     'resourceType' => $l->resource_type,
                     'action'       => $l->action,
-                    'count'        => $l->count,
-                ]),
+                    'count'        => (int) $l->count,
+                ])->values(),
             ];
         });
 

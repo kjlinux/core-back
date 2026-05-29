@@ -34,6 +34,9 @@ class AttendanceRecordResource extends JsonResource
             'source' => $this->source,
             'isDoubleBadge' => (bool) $this->is_double_badge,
             'notes' => $this->notes,
+            'expectedShift' => $this->expected_shift,
+            'segments' => $this->segments,
+            'isOnLeave' => (bool) $this->is_on_leave,
         ];
     }
 }

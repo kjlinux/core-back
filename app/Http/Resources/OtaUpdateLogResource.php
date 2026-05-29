@@ -7,13 +7,19 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class OtaUpdateLogResource extends JsonResource
 {
+    /** Cache des noms de terminaux par requete HTTP pour eviter le N+1 sur les collections. */
+    private static array $deviceNameCache = ['rfid' => [], 'biometric' => []];
+
     public function toArray(Request $request): array
     {
         $deviceName = null;
-        if ($this->device_kind === 'rfid') {
-            $deviceName = \App\Models\RfidDevice::find($this->device_id)?->name;
-        } elseif ($this->device_kind === 'biometric') {
-            $deviceName = \App\Models\BiometricDevice::find($this->device_id)?->name;
+        $kind = $this->device_kind;
+        if (in_array($kind, ['rfid', 'biometric'], true)) {
+            if (!array_key_exists($this->device_id, self::$deviceNameCache[$kind])) {
+                $model = $kind === 'rfid' ? \App\Models\RfidDevice::class : \App\Models\BiometricDevice::class;
+                self::$deviceNameCache[$kind][$this->device_id] = $model::whereKey($this->device_id)->value('name');
+            }
+            $deviceName = self::$deviceNameCache[$kind][$this->device_id];
         }
 
         return [

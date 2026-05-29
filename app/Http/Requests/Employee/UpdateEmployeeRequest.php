@@ -18,6 +18,7 @@ class UpdateEmployeeRequest extends FormRequest
             'company_id' => ['sometimes', 'exists:companies,id'],
             'site_id' => ['sometimes', 'exists:sites,id'],
             'department_id' => ['sometimes', 'exists:departments,id'],
+            'schedule_id' => ['sometimes', 'nullable', 'exists:schedules,id'],
             'first_name' => ['sometimes', 'string'],
             'last_name' => ['sometimes', 'string'],
             'email' => ['sometimes', 'email'],

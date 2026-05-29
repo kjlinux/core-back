@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AbsenceRequest;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\PayrollConfig;
@@ -83,6 +84,10 @@ class PayrollService
             return Carbon::parse($r->entry_time)->diffInMinutes(Carbon::parse($r->exit_time)) / 60;
         });
 
+        // Jours de conge approuves dans la periode : ne doivent pas etre comptes
+        // comme absences ni generer de penalite retard
+        $leaveDays = $this->countApprovedLeaveDays($employee->id, $start, $end);
+
         // Calcul des absences : pro-rata si l'employé a rejoint en cours de période
         $hiredAt = $employee->created_at ? Carbon::parse($employee->created_at)->startOfDay() : null;
         if ($hiredAt && $hiredAt->gt($end)) {
@@ -98,8 +103,14 @@ class PayrollService
             $absentDays = max(0, $workingDays - $workedDays);
         }
 
-        // Calcul des retards en minutes
+        // Soustraire les jours en conge approuve : non penalises comme absences
+        $absentDays = max(0, $absentDays - $leaveDays);
+
+        // Calcul des retards en minutes (exclut les pointages couverts par un conge)
         $totalLatenessMinutes = $records->sum(function ($r) {
+            if (($r->status ?? null) === 'on_leave' || ($r->is_on_leave ?? false)) {
+                return 0;
+            }
             return max(0, (int) ($r->late_minutes ?? 0));
         });
 
@@ -253,5 +264,30 @@ class PayrollService
         }
 
         return min($deduction, $baseSalary); // cap: jamais plus que le salaire
+    }
+
+    /**
+     * Compte le nombre de jours distincts couverts par des demandes de conge
+     * approuvees pour cet employe sur la periode [$start, $end].
+     */
+    private function countApprovedLeaveDays(string $employeeId, Carbon $start, Carbon $end): int
+    {
+        $leaves = AbsenceRequest::where('employee_id', $employeeId)
+            ->where('status', 'approved')
+            ->where('date_start', '<=', $end->toDateString())
+            ->where('date_end', '>=', $start->toDateString())
+            ->get();
+
+        $days = [];
+        foreach ($leaves as $leave) {
+            $from = Carbon::parse($leave->date_start)->greaterThan($start) ? Carbon::parse($leave->date_start) : $start->copy();
+            $to = Carbon::parse($leave->date_end)->lessThan($end) ? Carbon::parse($leave->date_end) : $end->copy();
+            $cursor = $from->copy();
+            while ($cursor->lte($to)) {
+                $days[$cursor->toDateString()] = true;
+                $cursor->addDay();
+            }
+        }
+        return count($days);
     }
 }

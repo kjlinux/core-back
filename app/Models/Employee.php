@@ -18,6 +18,7 @@ class Employee extends Model
         'company_id',
         'site_id',
         'department_id',
+        'schedule_id',
         'first_name',
         'last_name',
         'email',
@@ -48,6 +49,11 @@ class Employee extends Model
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function schedule(): BelongsTo
+    {
+        return $this->belongsTo(Schedule::class);
     }
 
     public function rfidCard(): HasOne

@@ -5,6 +5,7 @@ namespace App\Events;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
@@ -17,7 +18,28 @@ class DeviceStatusUpdated implements ShouldBroadcastNow
         public string $deviceId,
         public string $status,
         public array $data = [],
+        public ?string $previousStatus = null,
     ) {}
+
+    /**
+     * Construit un event enrichi à partir d'un modèle device (RFID/Biometric/Feelback).
+     * Hydrate name, serialNumber, companyId/Name, siteId/Name, isWitness.
+     */
+    public static function fromDevice(string $kind, Model $device, string $status, ?string $previousStatus = null, array $extra = []): self
+    {
+        $device->loadMissing(['company', 'site']);
+        $data = array_merge([
+            'serial_number' => $device->serial_number ?? null,
+            'deviceName' => $device->name ?? null,
+            'companyId' => $device->company_id ?? null,
+            'companyName' => $device->company?->name,
+            'siteId' => $device->site_id ?? null,
+            'siteName' => $device->site?->name,
+            'isWitness' => (bool) ($device->is_witness ?? false),
+        ], $extra);
+
+        return new self($kind, (string) $device->id, $status, $data, $previousStatus);
+    }
 
     /**
      * @return array<int, Channel>
@@ -41,6 +63,14 @@ class DeviceStatusUpdated implements ShouldBroadcastNow
             'deviceType' => $this->deviceType,
             'deviceId' => $this->deviceId,
             'status' => $this->status,
+            'previousStatus' => $this->previousStatus,
+            'deviceName' => $this->data['deviceName'] ?? null,
+            'serialNumber' => $this->data['serial_number'] ?? null,
+            'companyId' => $this->data['companyId'] ?? null,
+            'companyName' => $this->data['companyName'] ?? null,
+            'siteId' => $this->data['siteId'] ?? null,
+            'siteName' => $this->data['siteName'] ?? null,
+            'isWitness' => (bool) ($this->data['isWitness'] ?? false),
             'data' => $this->data,
             'timestamp' => now()->toISOString(),
         ];

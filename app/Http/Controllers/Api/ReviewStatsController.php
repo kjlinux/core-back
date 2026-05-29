@@ -27,18 +27,22 @@ class ReviewStatsController extends BaseApiController
 
         $totalSubmissions = ReviewSubmission::where('review_config_id', $config->id)->count();
 
-        $submissionIds = ReviewSubmission::where('review_config_id', $config->id)
-            ->pluck('id');
+        // Une seule requête GROUP BY pour tous les questions à la fois (évite N+1).
+        $avgByQuestion = ReviewAnswer::query()
+            ->whereIn('review_question_id', $config->questions->pluck('id'))
+            ->whereIn('review_submission_id', function ($q) use ($config) {
+                $q->select('id')->from('review_submissions')->where('review_config_id', $config->id);
+            })
+            ->selectRaw('review_question_id, AVG(stars) as avg_stars')
+            ->groupBy('review_question_id')
+            ->pluck('avg_stars', 'review_question_id');
 
-        $averagePerQuestion = $config->questions->map(function ($question) use ($submissionIds) {
-            $avg = ReviewAnswer::where('review_question_id', $question->id)
-                ->whereIn('review_submission_id', $submissionIds)
-                ->avg('stars');
-
+        $averagePerQuestion = $config->questions->map(function ($question) use ($avgByQuestion) {
+            $avg = $avgByQuestion[$question->id] ?? null;
             return [
                 'questionId' => (string) $question->id,
                 'text' => $question->text,
-                'average' => $avg ? round((float) $avg, 2) : 0,
+                'average' => $avg !== null ? round((float) $avg, 2) : 0,
             ];
         })->values();
 

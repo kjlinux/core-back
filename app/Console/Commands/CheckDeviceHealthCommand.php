@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Events\DeviceStatusUpdated;
 use App\Events\SystemHealthChanged;
 use App\Models\BiometricDevice;
 use App\Models\DeviceAlert;
@@ -13,12 +14,14 @@ use Illuminate\Console\Command;
 
 class CheckDeviceHealthCommand extends Command
 {
-    protected $signature = 'health:check-devices {--threshold=5 : Minutes before marking offline}';
+    protected $signature = 'health:check-devices {--threshold= : Minutes before marking offline (overrides config)}';
     protected $description = 'Check device heartbeats, mark offline ones, and emit alerts';
 
     public function handle(AlertService $alerts, HealthService $health): int
     {
-        $threshold = (int) $this->option('threshold');
+        $threshold = $this->option('threshold') !== null
+            ? (int) $this->option('threshold')
+            : (int) config('devices.offline_threshold_minutes', 5);
         $cutoff = now()->subMinutes($threshold);
 
         $this->checkDeviceTable(RfidDevice::query()->withoutGlobalScopes(), 'rfid', 'last_ping_at', $cutoff, $alerts);
@@ -26,7 +29,7 @@ class CheckDeviceHealthCommand extends Command
         $this->checkDeviceTable(FeelbackDevice::query()->withoutGlobalScopes(), 'feelback', 'last_ping_at', $cutoff, $alerts);
 
         $report = $health->snapshot();
-        event(new SystemHealthChanged($report));
+        $this->safeBroadcast(fn () => event(new SystemHealthChanged($report)));
 
         foreach ($report['components'] ?? [] as $name => $component) {
             if ($name === 'listeners') {
@@ -55,6 +58,10 @@ class CheckDeviceHealthCommand extends Command
             $device->is_online = false;
             $device->save();
 
+            $this->safeBroadcast(fn () => event(DeviceStatusUpdated::fromDevice($kind, $device, 'offline', 'online', [
+                'last_seen' => $device->{$timeColumn}?->toISOString(),
+            ])));
+
             $alerts->openOrUpdate([
                 'company_id' => $device->company_id ?? null,
                 'site_id' => $device->site_id ?? null,
@@ -70,6 +77,15 @@ class CheckDeviceHealthCommand extends Command
                     'is_witness' => (bool) ($device->is_witness ?? false),
                 ],
             ]);
+        }
+    }
+
+    protected function safeBroadcast(callable $fn): void
+    {
+        try {
+            $fn();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[health:check-devices] broadcast échoué (serveur temps réel injoignable ?): ' . $e->getMessage());
         }
     }
 

@@ -4,14 +4,19 @@ namespace App\Http\Controllers\Api\Support;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Models\BiometricDevice;
+use App\Models\Company;
 use App\Models\DeviceAlert;
 use App\Models\FeelbackDevice;
 use App\Models\QrCode;
 use App\Models\RfidDevice;
+use App\Models\User;
 use App\Services\AlertService;
 use App\Services\MqttService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class SupportController extends BaseApiController
 {
@@ -156,12 +161,53 @@ class SupportController extends BaseApiController
         }
     }
 
-    public function listWitnesses(): JsonResponse
+    public function sendCommand(Request $request, string $kind, string $id, MqttService $mqtt): JsonResponse
     {
-        $rfid = RfidDevice::query()->withoutGlobalScopes()->where('is_witness', true)->with('site:id,name')->get();
-        $bio = BiometricDevice::query()->withoutGlobalScopes()->where('is_witness', true)->with('site:id,name')->get();
-        $feel = FeelbackDevice::query()->withoutGlobalScopes()->where('is_witness', true)->with('site:id,name')->get();
-        $qr = QrCode::query()->withoutGlobalScopes()->where('is_witness', true)->with('site:id,name')->get();
+        $device = $this->findDevice($kind, $id);
+        if (!$device) return $this->errorResponse('Capteur introuvable', 404);
+        if (!in_array($kind, ['rfid', 'biometric'])) {
+            return $this->errorResponse('Type non supporté pour commande MQTT', 400);
+        }
+
+        $command = strtoupper((string) $request->input('command'));
+        if (!in_array($command, ['STATUS', 'REBOOT', 'RESET'])) {
+            return $this->errorResponse('Commande non autorisée', 422);
+        }
+
+        $commandCode = config("mqtt.command_codes.{$kind}.{$command}");
+        if ($commandCode === null) {
+            return $this->errorResponse('Commande indisponible pour ce type', 422);
+        }
+
+        $prefix = config("mqtt.topics.{$kind}");
+        $responseTopic = !empty($device->mqtt_topic)
+            ? $mqtt->getResponseTopic($device->mqtt_topic)
+            : "{$prefix}/{$device->serial_number}/response";
+
+        try {
+            $mqtt->publish($responseTopic, $commandCode);
+            Log::info('[Support] commande capteur', [
+                'support_user_id' => auth()->id(),
+                'kind' => $kind,
+                'device_id' => $id,
+                'command' => $command,
+            ]);
+            return $this->successResponse(['topic' => $responseTopic, 'command' => $command]);
+        } catch (\Throwable $e) {
+            return $this->errorResponse('Echec envoi commande: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function listWitnesses(Request $request): JsonResponse
+    {
+        $companyId = $request->input('company_id') ?: $this->resolveActiveCompanyId();
+
+        $applyCompany = fn ($q) => $companyId ? $q->where('company_id', $companyId) : $q;
+
+        $rfid = $applyCompany(RfidDevice::query()->withoutGlobalScopes()->where('is_witness', true)->with('site:id,name'))->get();
+        $bio = $applyCompany(BiometricDevice::query()->withoutGlobalScopes()->where('is_witness', true)->with('site:id,name'))->get();
+        $feel = $applyCompany(FeelbackDevice::query()->withoutGlobalScopes()->where('is_witness', true)->with('site:id,name'))->get();
+        $qr = $applyCompany(QrCode::query()->withoutGlobalScopes()->where('is_witness', true)->with('site:id,name'))->get();
 
         $threshold = (int) config('devices.offline_threshold_minutes', 5);
         $cutoff = now()->subMinutes($threshold);
@@ -221,11 +267,12 @@ class SupportController extends BaseApiController
     public function alerts(Request $request): JsonResponse
     {
         $perPage = (int) $request->input('per_page', 20);
+        $companyId = $request->input('company_id') ?: $this->resolveActiveCompanyId();
         $q = DeviceAlert::query()
             ->when($request->input('status'), fn ($q, $v) => $q->where('status', $v))
             ->when($request->input('severity'), fn ($q, $v) => $q->where('severity', $v))
             ->when($request->input('type'), fn ($q, $v) => $q->where('type', $v))
-            ->when($request->input('company_id'), fn ($q, $v) => $q->where('company_id', $v))
+            ->when($companyId, fn ($q, $v) => $q->where('company_id', $v))
             ->orderByDesc('created_at');
 
         $paginator = $q->paginate($perPage);
@@ -256,6 +303,138 @@ class SupportController extends BaseApiController
         $alert = DeviceAlert::findOrFail($id);
         $svc->resolve($alert);
         return $this->successResponse($alert->refresh());
+    }
+
+    public function companies(Request $request): JsonResponse
+    {
+        $threshold = (int) config('devices.offline_threshold_minutes', 5);
+        $cutoff = now()->subMinutes($threshold);
+
+        $companies = Company::query()->orderBy('name')->get();
+
+        $rows = $companies->map(function (Company $c) use ($cutoff) {
+            $counts = $this->deviceCountsForCompany($c->id, $cutoff);
+
+            return [
+                'id' => $c->id,
+                'name' => $c->name,
+                'email' => $c->email,
+                'phone' => $c->phone,
+                'isActive' => (bool) $c->is_active,
+                'devicesTotal' => $counts['total'],
+                'devicesOnline' => $counts['online'],
+                'devicesOffline' => $counts['total'] - $counts['online'],
+                'oldestOfflineSince' => $counts['oldestOfflineSince'],
+                'openAlerts' => DeviceAlert::query()
+                    ->where('company_id', $c->id)
+                    ->whereIn('status', [DeviceAlert::STATUS_OPEN, DeviceAlert::STATUS_ACKNOWLEDGED])
+                    ->count(),
+            ];
+        });
+
+        return $this->successResponse($rows->values());
+    }
+
+    public function companyDetail(string $id): JsonResponse
+    {
+        $company = Company::query()->find($id);
+        if (!$company) return $this->errorResponse('Compagnie introuvable', 404);
+
+        $threshold = (int) config('devices.offline_threshold_minutes', 5);
+        $cutoff = now()->subMinutes($threshold);
+        $counts = $this->deviceCountsForCompany($id, $cutoff);
+
+        $users = User::query()->where('company_id', $id)
+            ->orderBy('first_name')
+            ->get(['id', 'first_name', 'last_name', 'email', 'phone', 'role', 'is_active'])
+            ->map(fn ($u) => [
+                'id' => $u->id,
+                'name' => trim(($u->first_name ?? '') . ' ' . ($u->last_name ?? '')) ?: $u->email,
+                'email' => $u->email,
+                'phone' => $u->phone,
+                'role' => $u->role,
+                'isActive' => (bool) $u->is_active,
+            ]);
+
+        $alerts = DeviceAlert::query()
+            ->where('company_id', $id)
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get();
+
+        return $this->successResponse([
+            'company' => [
+                'id' => $company->id,
+                'name' => $company->name,
+                'email' => $company->email,
+                'phone' => $company->phone,
+                'address' => $company->address,
+                'isActive' => (bool) $company->is_active,
+            ],
+            'devices' => $counts,
+            'users' => $users,
+            'alerts' => $alerts,
+        ]);
+    }
+
+    public function resetUserPassword(string $userId): JsonResponse
+    {
+        $user = User::query()->find($userId);
+        if (!$user) return $this->errorResponse('Utilisateur introuvable', 404);
+        if ($user->role === 'super_admin') {
+            return $this->errorResponse('Action non autorisée sur un super administrateur', 403);
+        }
+
+        $tempPassword = Str::password(12, true, true, false);
+        $user->update(['password' => Hash::make($tempPassword)]);
+        $user->tokens()->delete();
+
+        Log::info('[Support] reset mot de passe utilisateur', [
+            'support_user_id' => auth()->id(),
+            'target_user_id' => $user->id,
+            'company_id' => $user->company_id,
+        ]);
+
+        return $this->successResponse([
+            'userId' => $user->id,
+            'tempPassword' => $tempPassword,
+        ]);
+    }
+
+    protected function deviceCountsForCompany(string $companyId, $cutoff): array
+    {
+        $total = 0;
+        $online = 0;
+        $oldest = null;
+
+        $specs = [
+            [RfidDevice::class, 'last_ping_at'],
+            [BiometricDevice::class, 'last_sync_at'],
+            [FeelbackDevice::class, 'last_ping_at'],
+        ];
+
+        foreach ($specs as [$model, $timeCol]) {
+            $devices = $model::query()->withoutGlobalScopes()
+                ->where('company_id', $companyId)
+                ->get(['id', 'is_online', $timeCol]);
+
+            foreach ($devices as $d) {
+                $total++;
+                $lastSeen = $d->{$timeCol};
+                $isOnline = (bool) $d->is_online && $lastSeen && $lastSeen->greaterThanOrEqualTo($cutoff);
+                if ($isOnline) {
+                    $online++;
+                } elseif ($lastSeen && ($oldest === null || $lastSeen->lessThan($oldest))) {
+                    $oldest = $lastSeen;
+                }
+            }
+        }
+
+        return [
+            'total' => $total,
+            'online' => $online,
+            'oldestOfflineSince' => $oldest?->toIso8601String(),
+        ];
     }
 
     protected function findDevice(string $kind, string $id)

@@ -5,13 +5,88 @@ namespace App\Http\Controllers\Api;
 use App\Models\Department;
 use App\Models\FeelbackEntry;
 use App\Models\Site;
+use App\Support\CsvExporter;
+use App\Support\ReportPdfRenderer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FeelbackReportController extends BaseApiController
 {
+    public function exportCsv(Request $request): StreamedResponse
+    {
+        $payload = $this->buildPayload($request);
+
+        $type = $request->input('type', 'global');
+        $headers = match ($type) {
+            'site'       => ['Site ID', 'Site', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
+            'department' => ['Dept ID', 'Departement', 'Site', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
+            'period'     => ['Periode', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
+            default      => ['Total reponses', 'Bon (%)', 'Neutre (%)', 'Mauvais (%)'],
+        };
+
+        $rows = match ($type) {
+            'site' => array_map(fn ($r) => [$r['siteId'], $r['site'], $r['totalResponses'], $r['bon'], $r['neutre'], $r['mauvais'], $r['satisfactionRate']], $payload['bySite']),
+            'department' => array_map(fn ($r) => [$r['departmentId'], $r['department'], $r['site'], $r['totalResponses'], $r['bon'], $r['neutre'], $r['mauvais'], $r['satisfactionRate']], $payload['byDepartment']),
+            'period' => array_map(fn ($r) => [$r['period'], $r['totalResponses'], $r['bon'], $r['neutre'], $r['mauvais'], $r['satisfactionRate']], $payload['byPeriod']),
+            default => [[$payload['totalResponses'], $payload['bonRate'], $payload['neutreRate'], $payload['mauvaisRate']]],
+        };
+
+        $filename = sprintf(
+            'rapport-feelback_%s_%s_au_%s.csv',
+            $type,
+            $request->input('start_date', 'tout'),
+            $request->input('end_date', 'tout'),
+        );
+
+        return CsvExporter::stream($filename, $headers, $rows);
+    }
+
+    public function exportPdf(Request $request): Response
+    {
+        $payload = $this->buildPayload($request);
+        $type = $request->input('type', 'global');
+
+        [$headers, $rows] = match ($type) {
+            'site' => [
+                ['Site', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
+                array_map(fn ($r) => [$r['site'], $r['totalResponses'], $r['bon'], $r['neutre'], $r['mauvais'], $r['satisfactionRate']], $payload['bySite']),
+            ],
+            'department' => [
+                ['Departement', 'Site', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
+                array_map(fn ($r) => [$r['department'], $r['site'], $r['totalResponses'], $r['bon'], $r['neutre'], $r['mauvais'], $r['satisfactionRate']], $payload['byDepartment']),
+            ],
+            'period' => [
+                ['Periode', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
+                array_map(fn ($r) => [$r['period'], $r['totalResponses'], $r['bon'], $r['neutre'], $r['mauvais'], $r['satisfactionRate']], $payload['byPeriod']),
+            ],
+            default => [
+                ['Total reponses', 'Bon (%)', 'Neutre (%)', 'Mauvais (%)'],
+                [[$payload['totalResponses'], $payload['bonRate'], $payload['neutreRate'], $payload['mauvaisRate']]],
+            ],
+        };
+
+        $summary = [
+            ['label' => 'Total reponses', 'value' => $payload['totalResponses']],
+            ['label' => 'Bon', 'value' => $payload['bonRate'] . ' %'],
+            ['label' => 'Neutre', 'value' => $payload['neutreRate'] . ' %'],
+            ['label' => 'Mauvais', 'value' => $payload['mauvaisRate'] . ' %'],
+        ];
+
+        $subtitle = sprintf('Vue: %s', $type);
+        $pdf = ReportPdfRenderer::render('Rapport Feelback', $headers, $rows, $summary, $subtitle);
+
+        return $pdf->download(sprintf('rapport-feelback_%s.pdf', $type));
+    }
+
     public function index(Request $request): JsonResponse
+    {
+        return $this->successResponse($this->buildPayload($request));
+    }
+
+    private function buildPayload(Request $request): array
     {
         $request->validate([
             'start_date'         => 'nullable|date',
@@ -108,27 +183,33 @@ class FeelbackReportController extends BaseApiController
         ])->values()->toArray();
 
         // ── By department ─────────────────────────────────────────────────────
-        // feelback_entries are linked to sites, not departments.
-        // We resolve department→site, then reuse the already-computed per-site stats.
-        // This avoids JOIN multiplication when a site has multiple departments.
+        // feelback_entries n'est lié qu'au site (pas de département / employé).
+        // Pour éviter que chaque département d'un même site hérite du TOTAL du site
+        // (ce qui fausse les sommes et double-compte), on répartit proportionnellement
+        // les compteurs du site entre ses départements (parts égales).
         $siteStatsBySiteId = $siteRows->keyBy('site_id');
-        $siteNamesById     = $sitesById; // already fetched above
+        $siteNamesById     = $sitesById;
 
         $departments = Department::whereIn('site_id', $siteRows->pluck('site_id'))
             ->get(['id', 'name', 'site_id']);
 
-        $byDepartment = $departments->map(function ($dept) use ($siteStatsBySiteId, $siteNamesById) {
+        $deptCountBySite = $departments->groupBy('site_id')->map->count();
+
+        $byDepartment = $departments->map(function ($dept) use ($siteStatsBySiteId, $siteNamesById, $deptCountBySite) {
             $stats = $siteStatsBySiteId[$dept->site_id] ?? null;
-            $total = $stats ? (int) $stats->total : 0;
-            $bon   = $stats ? (int) $stats->bon : 0;
+            $share = max(1, (int) ($deptCountBySite[$dept->site_id] ?? 1));
+            $total   = $stats ? (int) round(((int) $stats->total)   / $share) : 0;
+            $bon     = $stats ? (int) round(((int) $stats->bon)     / $share) : 0;
+            $neutre  = $stats ? (int) round(((int) $stats->neutre)  / $share) : 0;
+            $mauvais = $stats ? (int) round(((int) $stats->mauvais) / $share) : 0;
             return [
                 'departmentId'     => (string) $dept->id,
                 'department'       => $dept->name,
                 'site'             => $siteNamesById[$dept->site_id] ?? '-',
                 'totalResponses'   => $total,
                 'bon'              => $bon,
-                'neutre'           => $stats ? (int) $stats->neutre : 0,
-                'mauvais'          => $stats ? (int) $stats->mauvais : 0,
+                'neutre'           => $neutre,
+                'mauvais'          => $mauvais,
                 'satisfactionRate' => $total > 0 ? round($bon / $total * 100, 1) : 0,
             ];
         })->values()->toArray();
@@ -171,7 +252,7 @@ class FeelbackReportController extends BaseApiController
             'satisfactionRate' => $r->total > 0 ? round($r->bon / $r->total * 100, 1) : 0,
         ])->values()->toArray();
 
-        return $this->successResponse([
+        return [
             'totalResponses' => $totalResponses,
             'bonRate'        => $bonRate,
             'neutreRate'     => $neutreRate,
@@ -179,6 +260,6 @@ class FeelbackReportController extends BaseApiController
             'bySite'         => $bySite,
             'byDepartment'   => $byDepartment,
             'byPeriod'       => $byPeriod,
-        ]);
+        ];
     }
 }

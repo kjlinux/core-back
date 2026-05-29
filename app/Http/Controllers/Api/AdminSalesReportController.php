@@ -4,13 +4,76 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Support\CsvExporter;
+use App\Support\ReportPdfRenderer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AdminSalesReportController extends BaseApiController
 {
+    public function exportCsv(Request $request): StreamedResponse
+    {
+        $payload = $this->buildReport($request);
+
+        $headers = ['Mois', 'Commandes', 'CA (FCFA)'];
+        $monthly = collect($payload['revenueByMonth']);
+        $rows = $monthly->map(fn ($r) => [
+            is_object($r) ? ($r->month ?? '') : ($r['month'] ?? ''),
+            is_object($r) ? ($r->orders ?? 0) : ($r['orders'] ?? 0),
+            is_object($r) ? ($r->revenue ?? 0) : ($r['revenue'] ?? 0),
+        ])->toArray();
+
+        // Lignes de synthèse en tête.
+        $summary = [
+            ['Total commandes', '', $payload['totalOrders']],
+            ['CA total (FCFA)', '', $payload['totalRevenue']],
+            ['Panier moyen (FCFA)', '', $payload['averageBasket']],
+            ['Commandes en attente', '', $payload['pendingOrders']],
+            ['', '', ''],
+        ];
+
+        $filename = sprintf(
+            'rapport-ventes_%s_au_%s.csv',
+            $request->input('start_date', 'tout'),
+            $request->input('end_date', 'tout'),
+        );
+
+        return CsvExporter::stream($filename, $headers, array_merge($summary, $rows));
+    }
+
+    public function exportPdf(Request $request): Response
+    {
+        $payload = $this->buildReport($request);
+
+        $headers = ['Mois', 'Commandes', 'CA (FCFA)'];
+        $rows = collect($payload['revenueByMonth'])->map(fn ($r) => [
+            is_object($r) ? ($r->month ?? '') : ($r['month'] ?? ''),
+            is_object($r) ? ($r->orders ?? 0) : ($r['orders'] ?? 0),
+            is_object($r) ? ($r->revenue ?? 0) : ($r['revenue'] ?? 0),
+        ])->toArray();
+
+        $summary = [
+            ['label' => 'Total commandes', 'value' => $payload['totalOrders']],
+            ['label' => 'CA total', 'value' => number_format((float) $payload['totalRevenue'], 0, ',', ' ') . ' FCFA'],
+            ['label' => 'Panier moyen', 'value' => number_format((float) $payload['averageBasket'], 0, ',', ' ') . ' FCFA'],
+            ['label' => 'En attente', 'value' => $payload['pendingOrders']],
+        ];
+
+        $subtitle = sprintf('Du %s au %s', $request->input('start_date', 'debut'), $request->input('end_date', 'fin'));
+        $pdf = ReportPdfRenderer::render('Rapport de ventes', $headers, $rows, $summary, $subtitle);
+
+        return $pdf->download(sprintf('rapport-ventes_%s_au_%s.pdf', $request->input('start_date', 'tout'), $request->input('end_date', 'tout')));
+    }
+
     public function index(Request $request): JsonResponse
+    {
+        return $this->successResponse($this->buildReport($request));
+    }
+
+    private function buildReport(Request $request): array
     {
         $request->validate([
             'start_date' => 'nullable|date',
@@ -98,7 +161,7 @@ class AdminSalesReportController extends BaseApiController
                 'quantity' => (int) $item->total_quantity,
             ]);
 
-        return $this->successResponse([
+        return [
             'totalOrders'    => $totalOrders,
             'totalRevenue'   => $totalRevenue,
             'averageBasket'  => $averageBasket,
@@ -106,7 +169,7 @@ class AdminSalesReportController extends BaseApiController
             'revenueByMonth' => $revenueByMonth,
             'ordersByStatus' => $ordersByStatus,
             'topProducts'    => $topProducts,
-        ]);
+        ];
     }
 
     private function translateStatus(string $status): string

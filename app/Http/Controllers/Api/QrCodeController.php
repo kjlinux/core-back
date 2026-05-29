@@ -29,7 +29,9 @@ class QrCodeController extends BaseApiController
 
     public function show(string $id): JsonResponse
     {
-        $qrCode = QrCode::with('site')->findOrFail($id);
+        $query = QrCode::with('site')->whereKey($id);
+        $this->scopeByCompany($query);
+        $qrCode = $query->firstOrFail();
 
         return $this->resourceResponse(new \App\Http\Resources\QrCodeResource($qrCode));
     }
@@ -73,7 +75,9 @@ class QrCodeController extends BaseApiController
 
     public function revoke(string $id): JsonResponse
     {
-        $qrCode = QrCode::findOrFail($id);
+        $query = QrCode::whereKey($id);
+        $this->scopeByCompany($query);
+        $qrCode = $query->firstOrFail();
         $qrCode->update(['is_active' => false]);
 
         return $this->noContentResponse();

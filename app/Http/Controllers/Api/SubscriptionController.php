@@ -25,7 +25,18 @@ class SubscriptionController extends BaseApiController
         $user = $request->user();
         $company = $user?->company;
         if (! $company) {
-            return $this->errorResponse('Aucune compagnie associee', 404);
+            // super_admin et autres utilisateurs sans compagnie n'ont pas d'abonnement
+            return $this->successResponse([
+                'company_id' => null,
+                'subscription' => null,
+                'starts_at' => null,
+                'expires_at' => null,
+                'next_period_paid' => false,
+                'next_expires_at' => null,
+                'is_active' => false,
+                'warranty_ends_at' => null,
+                'is_warranty_active' => false,
+            ]);
         }
 
         return $this->successResponse([
