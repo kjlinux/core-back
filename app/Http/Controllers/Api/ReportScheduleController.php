@@ -30,7 +30,7 @@ class ReportScheduleController extends BaseApiController
         $schedule->next_run_at = $schedule->computeNextRun();
         $schedule->save();
 
-        return $this->successResponse($schedule, 'Planification creee', 201);
+        return $this->successResponse($schedule, 'Planification créée', 201);
     }
 
     public function update(Request $request, string $id): JsonResponse
@@ -66,14 +66,14 @@ class ReportScheduleController extends BaseApiController
         $required = $partial ? 'sometimes' : 'required';
 
         return $request->validate([
-            'report_type'  => "$required|string|in:attendance,feelback,sales",
-            'format'       => 'sometimes|string|in:pdf,csv',
-            'frequency'    => "$required|string|in:daily,weekly,monthly",
-            'filters'      => 'sometimes|nullable|array',
-            'recipients'   => "$required|array|min:1",
+            'report_type' => "$required|string|in:attendance,feelback,sales",
+            'format' => 'sometimes|string|in:pdf,csv',
+            'frequency' => "$required|string|in:daily,weekly,monthly",
+            'filters' => 'sometimes|nullable|array',
+            'recipients' => "$required|array|min:1",
             'recipients.*' => 'email',
-            'company_id'   => 'sometimes|nullable|uuid|exists:companies,id',
-            'is_active'    => 'sometimes|boolean',
+            'company_id' => 'sometimes|nullable|uuid|exists:companies,id',
+            'is_active' => 'sometimes|boolean',
         ]);
     }
 }

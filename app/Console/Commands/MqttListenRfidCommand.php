@@ -122,14 +122,20 @@ class MqttListenRfidCommand extends Command
             return;
         }
 
-        // Ignorer les messages de statut purs (ex: {"status":"online"}), mais en
-        // profiter pour marquer le terminal en ligne et relancer une OTA en attente
-        // si le terminal vient de se reconnecter.
-        if (isset($data['status']) && ! isset($data['card_uid']) && ! isset($data['uid'])) {
-            $this->info('Message de statut');
+        // Messages sans badge : statut de connexion ({"status":"online"}) OU reponse
+        // a la commande STATUS du terminal ({"device_id","version","uptime","ip",...}).
+        // Aucun pointage, mais on marque le terminal en ligne, on rafraichit
+        // last_ping_at et on relance une OTA en attente s'il vient de se reconnecter.
+        if (! isset($data['card_uid']) && ! isset($data['uid'])) {
+            $this->info('Message de statut/heartbeat terminal');
             $parts = explode('/', $topic);
             $serial = $parts[3] ?? null;
             if ($serial && ($device = RfidDevice::where('serial_number', $serial)->first())) {
+                // Le firmware reporte sa version sous "version" ; markOnlineAndRetryOta
+                // attend "firmware_version".
+                if (! empty($data['version']) && empty($data['firmware_version'])) {
+                    $data['firmware_version'] = $data['version'];
+                }
                 $this->markOnlineAndRetryOta($device, $data);
             }
 
@@ -145,9 +151,16 @@ class MqttListenRfidCommand extends Command
             return;
         }
 
-        // Ignorer les messages sync/heartbeat qui ont uid mais pas de scan réel
+        // Messages sync/heartbeat : uid present mais pas de scan reel. On ne cree
+        // pas de pointage, mais on rafraichit last_ping_at pour refleter que le
+        // terminal est bien vivant entre deux badges.
         if (! isset($data['card_uid']) && isset($data['timestamp'])) {
-            $this->info("Message sync ignoré (uid={$rawUid})");
+            $this->info("Message sync (uid={$rawUid})");
+            $parts = explode('/', $topic);
+            $serial = $parts[3] ?? null;
+            if ($serial && ($device = RfidDevice::where('serial_number', $serial)->first())) {
+                $this->markOnlineAndRetryOta($device, $data);
+            }
 
             return;
         }
@@ -231,7 +244,7 @@ class MqttListenRfidCommand extends Command
             $exitTime = now();
             $earlyMinutes = 0;
 
-            $schedule = $resolver->resolveForEmployee($employee->company_id, $employee->department_id, $exitTime);
+            $schedule = $resolver->resolveForEmployee($employee->company_id, $employee->department_id, $exitTime, $employee->schedule_id);
 
             if ($schedule) {
                 $earlyMinutes = $resolver->calculateEarlyDepartureMinutes($schedule, $exitTime);
@@ -251,7 +264,7 @@ class MqttListenRfidCommand extends Command
             $lateMinutes = 0;
             $status = 'present';
 
-            $schedule = $resolver->resolveForEmployee($employee->company_id, $employee->department_id, $entryTime);
+            $schedule = $resolver->resolveForEmployee($employee->company_id, $employee->department_id, $entryTime, $employee->schedule_id);
 
             if ($schedule) {
                 $lateMinutes = $resolver->calculateLateMinutes($schedule, $entryTime);
@@ -350,10 +363,10 @@ class MqttListenRfidCommand extends Command
             ->where('started_at', '<', now()->subSeconds(30))
             ->where(function ($q) {
                 $q->whereIn('status', ['pending', 'in_progress'])
-                  ->orWhere(function ($q2) {
-                      $q2->where('status', 'failed')
-                         ->where('error_message', 'like', 'Timeout%');
-                  });
+                    ->orWhere(function ($q2) {
+                        $q2->where('status', 'failed')
+                            ->where('error_message', 'like', 'Timeout%');
+                    });
             })
             ->orderByDesc('started_at')
             ->get()
@@ -367,6 +380,7 @@ class MqttListenRfidCommand extends Command
 
             if ($currentVersion && $fw->version === $currentVersion) {
                 $log->update(['status' => 'success', 'completed_at' => now()]);
+
                 continue;
             }
 

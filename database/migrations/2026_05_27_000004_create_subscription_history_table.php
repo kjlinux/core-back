@@ -26,7 +26,10 @@ return new class extends Migration
             $table->index(['company_id', 'created_at']);
         });
 
-        DB::statement("ALTER TABLE subscription_history ADD CONSTRAINT subscription_history_event_check CHECK (event IN ('subscribed','upgraded','downgraded','renewed','prepaid','rolled_over','expired','admin_changed'))");
+        // Contrainte CHECK specifique a PostgreSQL ; ignoree sur sqlite (tests).
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE subscription_history ADD CONSTRAINT subscription_history_event_check CHECK (event IN ('subscribed','upgraded','downgraded','renewed','prepaid','rolled_over','expired','admin_changed'))");
+        }
     }
 
     public function down(): void

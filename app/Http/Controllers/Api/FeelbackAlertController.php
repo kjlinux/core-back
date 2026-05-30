@@ -14,42 +14,59 @@ class FeelbackAlertController extends BaseApiController
         $query = FeelbackAlert::with(['site', 'device']);
 
         $user = $request->user();
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $activeCompanyId = $this->resolveActiveCompanyId();
             $query->where('company_id', $activeCompanyId);
         }
 
-        if ($request->filled('site_id')) {
-            $query->where('site_id', $request->site_id);
-        }
+        $query->when($request->filled('site_id'), function ($q) use ($request) {
+            $q->where('site_id', $request->input('site_id'));
+        });
 
-        if ($request->filled('type')) {
-            $query->where('type', $request->type);
-        }
+        $query->when($request->filled('type'), function ($q) use ($request) {
+            $q->where('type', $request->input('type'));
+        });
 
-        if ($request->has('is_read')) {
-            $query->where('is_read', filter_var($request->is_read, FILTER_VALIDATE_BOOLEAN));
-        }
+        $query->when($request->has('is_read'), function ($q) use ($request) {
+            $q->where('is_read', filter_var($request->input('is_read'), FILTER_VALIDATE_BOOLEAN));
+        });
+
+        $query->when($request->input('search'), function ($q, $search) {
+            $q->where(function ($qq) use ($search) {
+                $qq->where('message', 'LIKE', "%{$search}%")
+                    ->orWhereHas('site', function ($siteQuery) use ($search) {
+                        $siteQuery->where('name', 'LIKE', "%{$search}%");
+                    });
+            });
+        });
 
         $alerts = $query->orderBy('created_at', 'desc')
-            ->paginate($request->input('per_page', 15));
+            ->paginate((int) $request->input('per_page', 15));
 
         return $this->paginatedResponse(FeelbackAlertResource::collection($alerts));
     }
 
     public function updateSettings(Request $request): JsonResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'threshold' => 'required|integer',
+            'offline_delay_minutes' => 'nullable|integer|min:1',
         ]);
 
-        $threshold = $request->input('threshold');
-
+        $threshold = $validated['threshold'];
         cache()->put('feelback_alert_threshold', $threshold);
 
+        $offlineDelayMinutes = $validated['offline_delay_minutes'] ?? null;
+        if ($offlineDelayMinutes !== null) {
+            cache()->put('feelback_alert_offline_delay_minutes', $offlineDelayMinutes);
+        }
+
         return $this->successResponse(
-            ['threshold' => $threshold],
-            'Parametres mis a jour'
+            [
+                'threshold' => $threshold,
+                'offline_delay_minutes' => $offlineDelayMinutes,
+            ],
+            'Paramètres mis à jour'
         );
     }
 }

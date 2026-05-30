@@ -25,10 +25,22 @@ class ProductController extends BaseApiController
         }
 
         if ($request->filled('search')) {
-            $query->where('name', 'LIKE', '%' . $request->search . '%');
+            $query->where('name', 'LIKE', '%'.$request->input('search').'%');
         }
 
-        $products = $query->paginate($request->input('per_page', 15));
+        if ($request->filled('stock_status')) {
+            $query->where(function ($q) use ($request) {
+                match ($request->input('stock_status')) {
+                    'out_of_stock' => $q->where('stock_quantity', '<=', 0),
+                    'critical' => $q->whereBetween('stock_quantity', [1, 10]),
+                    'low' => $q->whereBetween('stock_quantity', [11, 50]),
+                    'normal' => $q->where('stock_quantity', '>', 50),
+                    default => $q,
+                };
+            });
+        }
+
+        $products = $query->paginate((int) $request->input('per_page', 15));
 
         return $this->paginatedResponse(ProductResource::collection($products));
     }
@@ -46,6 +58,7 @@ class ProductController extends BaseApiController
         $data['category'] = $data['category'] ?? 'standard_card';
         $data['customizable'] = $data['customizable'] ?? false;
         $data['min_quantity'] = $data['min_quantity'] ?? 1;
+        $data['is_active'] = $data['is_active'] ?? true;
         $product = Product::create($data);
 
         return $this->resourceResponse(new ProductResource($product), '', 201);

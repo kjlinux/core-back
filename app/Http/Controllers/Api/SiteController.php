@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\Site;
-use App\Models\TechnicienActivityLog;
-use App\Http\Resources\SiteResource;
-use App\Http\Resources\DepartmentResource;
 use App\Http\Requests\Site\StoreSiteRequest;
 use App\Http\Requests\Site\UpdateSiteRequest;
+use App\Http\Resources\DepartmentResource;
+use App\Http\Resources\SiteResource;
+use App\Models\Site;
+use App\Models\TechnicienActivityLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -22,7 +22,17 @@ class SiteController extends BaseApiController
 
         $this->scopeByCompany($query);
 
-        $perPage = $request->input('per_page', 15);
+        $query->when($request->input('search'), function ($q, $search) {
+            $q->where(function ($qq) use ($search) {
+                $qq->where('name', 'LIKE', "%{$search}%")
+                    ->orWhere('address', 'LIKE', "%{$search}%")
+                    ->orWhereHas('company', function ($cq) use ($search) {
+                        $cq->where('name', 'LIKE', "%{$search}%");
+                    });
+            });
+        });
+
+        $perPage = (int) $request->input('per_page', 15);
         $sites = $query->paginate($perPage);
 
         return $this->paginatedResponse(SiteResource::collection($sites));
@@ -39,7 +49,7 @@ class SiteController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $site->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
@@ -56,7 +66,7 @@ class SiteController extends BaseApiController
 
         TechnicienActivityLog::record('create', 'site', (string) $site->id, $site->name);
 
-        return $this->resourceResponse(new SiteResource($site), 'Site cree avec succes', 201);
+        return $this->resourceResponse(new SiteResource($site), 'Site créé avec succès', 201);
     }
 
     /**
@@ -69,7 +79,7 @@ class SiteController extends BaseApiController
 
         TechnicienActivityLog::record('update', 'site', (string) $site->id, $site->name);
 
-        return $this->resourceResponse(new SiteResource($site), 'Site mis a jour avec succes');
+        return $this->resourceResponse(new SiteResource($site), 'Site mis à jour avec succès');
     }
 
     /**

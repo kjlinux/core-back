@@ -32,9 +32,12 @@ return new class extends Migration
             $table->index(['company_id', 'call_type']);
         });
 
-        DB::statement("ALTER TABLE client_followup_calls ADD CONSTRAINT cfc_call_type_check CHECK (call_type IN ('j2','j7','j30'))");
-        DB::statement("ALTER TABLE client_followup_calls ADD CONSTRAINT cfc_status_check CHECK (status IN ('pending','done','skipped','escalated'))");
-        DB::statement("ALTER TABLE client_followup_calls ADD CONSTRAINT cfc_result_check CHECK (result IS NULL OR result IN ('ok','partial','problem'))");
+        // Contraintes CHECK specifiques a PostgreSQL ; ignorees sur sqlite (tests).
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE client_followup_calls ADD CONSTRAINT cfc_call_type_check CHECK (call_type IN ('j2','j7','j30'))");
+            DB::statement("ALTER TABLE client_followup_calls ADD CONSTRAINT cfc_status_check CHECK (status IN ('pending','done','skipped','escalated'))");
+            DB::statement("ALTER TABLE client_followup_calls ADD CONSTRAINT cfc_result_check CHECK (result IS NULL OR result IN ('ok','partial','problem'))");
+        }
     }
 
     public function down(): void

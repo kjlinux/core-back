@@ -13,9 +13,9 @@ class ResetPasswordController extends BaseApiController
     public function __invoke(Request $request): JsonResponse
     {
         $request->validate([
-            'token'                 => ['required', 'string'],
-            'email'                 => ['required', 'email'],
-            'password'              => ['required', 'string', PasswordRule::min(8), 'confirmed'],
+            'token' => ['required', 'string'],
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string', PasswordRule::min(8)->mixedCase()->numbers(), 'confirmed'],
             'password_confirmation' => ['required', 'string'],
         ]);
 
@@ -28,13 +28,13 @@ class ResetPasswordController extends BaseApiController
         );
 
         if ($status === Password::PASSWORD_RESET) {
-            return $this->successResponse(null, 'Mot de passe reinitialise avec succes. Vous pouvez maintenant vous connecter.');
+            return $this->successResponse(null, 'Mot de passe réinitialisé avec succès. Vous pouvez maintenant vous connecter.');
         }
 
         $message = match ($status) {
-            Password::INVALID_TOKEN => 'Lien de reinitialisation invalide ou expire.',
-            Password::INVALID_USER  => 'Aucun compte trouve avec cet email.',
-            default                 => 'Impossible de reinitialiser le mot de passe.',
+            Password::INVALID_TOKEN => 'Lien de réinitialisation invalide ou expiré.',
+            Password::INVALID_USER => 'Aucun compte trouve avec cet email.',
+            default => 'Impossible de réinitialiser le mot de passe.',
         };
 
         return $this->errorResponse($message, 422);

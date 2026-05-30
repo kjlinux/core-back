@@ -5,9 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Requests\Order\StoreOrderRequest;
 use App\Http\Resources\OrderResource;
 use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\Product;
-use App\Services\Payment\IntouchService;
+use App\Services\LigdiCashService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -56,7 +55,7 @@ class OrderController extends BaseApiController
         if (! $user->isSuperAdmin()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($order->company_id !== $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
@@ -92,14 +91,14 @@ class OrderController extends BaseApiController
             $total = $subtotal + $deliveryFee;
 
             $order = Order::create([
-                'order_number' => 'ORD-' . strtoupper(Str::random(8)),
+                'order_number' => 'ORD-'.strtoupper(Str::random(8)),
                 'company_id' => $data['company_id'] ?? $request->user()->company_id,
                 'subtotal' => $subtotal,
                 'delivery_fee' => $deliveryFee,
                 'total' => $total,
                 'currency' => 'XOF',
                 'status' => 'pending',
-                'payment_method' => $data['payment_method'] ?? 'intouch_mobile_money',
+                'payment_method' => $data['payment_method'] ?? 'ligdicash',
                 'payment_status' => 'pending',
                 'delivery_address' => $data['delivery_address'] ?? [],
             ]);
@@ -127,7 +126,7 @@ class OrderController extends BaseApiController
         if (! $user->isSuperAdmin()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($order->company_id !== $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
@@ -140,7 +139,7 @@ class OrderController extends BaseApiController
         return $this->resourceResponse(new OrderResource($order));
     }
 
-    public function initiatePayment(string $id, IntouchService $intouch): JsonResponse
+    public function initiatePayment(string $id, LigdiCashService $gateway): JsonResponse
     {
         $user = auth()->user();
         $order = Order::with('items')->findOrFail($id);
@@ -149,7 +148,7 @@ class OrderController extends BaseApiController
         if (! $user->isSuperAdmin()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($order->company_id !== $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
@@ -158,7 +157,7 @@ class OrderController extends BaseApiController
             return $this->successResponse([
                 'payment_url' => null,
                 'token' => null,
-                'message' => 'Commande enregistree. Un administrateur vous contactera pour confirmer le paiement.',
+                'message' => 'Commande enregistrée. Un administrateur vous contactera pour confirmer le paiement.',
             ]);
         }
 
@@ -170,10 +169,20 @@ class OrderController extends BaseApiController
             ];
         })->toArray();
 
-        $result = $intouch->createPayment([
+        // La passerelle attend que la somme des lignes egale le montant total facture.
+        // On ajoute donc explicitement les frais de livraison comme ligne dediee.
+        if ($order->delivery_fee > 0) {
+            $items[] = [
+                'name' => 'Frais de livraison',
+                'quantity' => 1,
+                'unit_price' => $order->delivery_fee,
+            ];
+        }
+
+        $result = $gateway->createPayment([
             'amount' => $order->total,
             'reference' => $order->id,
-            'description' => 'Commande ' . $order->order_number,
+            'description' => 'Commande '.$order->order_number,
             'type' => 'order',
             'items' => $items,
             'customer' => [
@@ -194,7 +203,7 @@ class OrderController extends BaseApiController
                 'payment_url' => null,
                 'token' => null,
                 'pending' => true,
-                'message' => 'La passerelle de paiement est temporairement indisponible. Votre commande est enregistree et sera traitee manuellement.',
+                'message' => 'La passerelle de paiement est temporairement indisponible. Votre commande est enregistrée et sera traitée manuellement.',
             ]);
         }
 

@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         foreach (['rfid_devices', 'biometric_devices', 'feelback_devices', 'qr_codes'] as $table) {
-            if (Schema::hasTable($table) && !Schema::hasColumn($table, 'is_witness')) {
+            if (Schema::hasTable($table) && ! Schema::hasColumn($table, 'is_witness')) {
                 Schema::table($table, function (Blueprint $t) {
                     $t->boolean('is_witness')->default(false)->index();
                 });

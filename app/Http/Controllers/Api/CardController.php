@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\RfidCard;
-use App\Models\CardHistory;
-use App\Models\TechnicienActivityLog;
-use App\Http\Resources\RfidCardResource;
-use App\Http\Resources\CardHistoryResource;
-use App\Http\Requests\Card\StoreCardRequest;
 use App\Http\Requests\Card\AssignCardRequest;
 use App\Http\Requests\Card\BlockCardRequest;
+use App\Http\Requests\Card\StoreCardRequest;
+use App\Http\Resources\CardHistoryResource;
+use App\Http\Resources\RfidCardResource;
+use App\Models\CardHistory;
+use App\Models\RfidCard;
+use App\Models\TechnicienActivityLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -51,7 +51,7 @@ class CardController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $card->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
@@ -70,7 +70,7 @@ class CardController extends BaseApiController
 
         TechnicienActivityLog::record('create', 'card', (string) $card->id, $card->uid);
 
-        return $this->resourceResponse(new RfidCardResource($card), 'Carte RFID creee avec succes', 201);
+        return $this->resourceResponse(new RfidCardResource($card), 'Carte RFID créée avec succès', 201);
     }
 
     /**
@@ -90,14 +90,14 @@ class CardController extends BaseApiController
             'card_id' => $card->id,
             'action' => 'assigned',
             'performed_by' => Auth::user()->name,
-            'details' => 'Carte assignee a l\'employe #' . $request->input('employee_id'),
+            'details' => 'Carte assignée à l\'employé #'.$request->input('employee_id'),
         ]);
 
         $card->load('employee');
 
         TechnicienActivityLog::record('assign', 'card', (string) $card->id, $card->uid);
 
-        return $this->resourceResponse(new RfidCardResource($card), 'Carte assignee avec succes');
+        return $this->resourceResponse(new RfidCardResource($card), 'Carte assignée avec succès');
     }
 
     /**
@@ -119,10 +119,10 @@ class CardController extends BaseApiController
             'card_id' => $card->id,
             'action' => 'unassigned',
             'performed_by' => Auth::user()->name,
-            'details' => 'Carte desassignee de l\'employe #' . $previousEmployeeId,
+            'details' => 'Carte désassignée de l\'employé #'.$previousEmployeeId,
         ]);
 
-        return $this->resourceResponse(new RfidCardResource($card), 'Carte desassignee avec succes');
+        return $this->resourceResponse(new RfidCardResource($card), 'Carte désassignée avec succès');
     }
 
     /**
@@ -142,10 +142,10 @@ class CardController extends BaseApiController
             'card_id' => $card->id,
             'action' => 'blocked',
             'performed_by' => Auth::user()->name,
-            'details' => 'Carte bloquee. Raison: ' . $request->input('block_reason'),
+            'details' => 'Carte bloquée. Raison : '.$request->input('block_reason'),
         ]);
 
-        return $this->resourceResponse(new RfidCardResource($card), 'Carte bloquee avec succes');
+        return $this->resourceResponse(new RfidCardResource($card), 'Carte bloquée avec succès');
     }
 
     /**
@@ -168,10 +168,10 @@ class CardController extends BaseApiController
             'card_id' => $card->id,
             'action' => 'activated',
             'performed_by' => Auth::user()->name,
-            'details' => 'Carte debloquee et reactivee',
+            'details' => 'Carte débloquée et réactivée',
         ]);
 
-        return $this->resourceResponse(new RfidCardResource($card), 'Carte debloquee avec succes');
+        return $this->resourceResponse(new RfidCardResource($card), 'Carte débloquée avec succès');
     }
 
     /**

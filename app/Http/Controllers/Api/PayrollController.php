@@ -14,6 +14,7 @@ use App\Models\Payslip;
 use App\Services\PayrollService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PayrollController extends BaseApiController
 {
@@ -33,6 +34,7 @@ class PayrollController extends BaseApiController
             return true;
         }
         $activeCompanyId = $this->resolveActiveCompanyId();
+
         return (string) $activeCompanyId === (string) $companyId;
     }
 
@@ -43,7 +45,7 @@ class PayrollController extends BaseApiController
     public function getConfig(string $companyId): JsonResponse
     {
         if (! $this->authorizeCompanyAccess($companyId)) {
-            return $this->errorResponse('Acces non autorise', 403);
+            return $this->errorResponse('Accès non autorisé', 403);
         }
 
         $config = PayrollConfig::with('latenessRules')
@@ -70,7 +72,7 @@ class PayrollController extends BaseApiController
     public function saveConfig(SavePayrollConfigRequest $request, string $companyId): JsonResponse
     {
         if (! $this->authorizeCompanyAccess($companyId)) {
-            return $this->errorResponse('Acces non autorise', 403);
+            return $this->errorResponse('Accès non autorisé', 403);
         }
 
         $config = PayrollConfig::with('latenessRules')
@@ -89,21 +91,24 @@ class PayrollController extends BaseApiController
     public function saveLatenessRules(SaveLatenessRulesRequest $request, string $companyId): JsonResponse
     {
         if (! $this->authorizeCompanyAccess($companyId)) {
-            return $this->errorResponse('Acces non autorise', 403);
+            return $this->errorResponse('Accès non autorisé', 403);
         }
 
-        // Supprimer les regles existantes et recreer
-        LatenessRule::where('company_id', $companyId)->delete();
+        // Supprimer les regles existantes et recreer dans une transaction
+        // afin de ne jamais perdre les regles en cas d'echec en cours de route.
+        $rules = DB::transaction(function () use ($request, $companyId) {
+            LatenessRule::where('company_id', $companyId)->delete();
 
-        $rules = collect($request->input('rules'))->map(function ($rule) use ($companyId) {
-            return LatenessRule::create([
-                'company_id' => $companyId,
-                'tolerance_minutes' => $rule['tolerance_minutes'],
-                'minutes_threshold' => $rule['minutes_threshold'],
-                'penalty_value' => $rule['penalty_value'],
-                'penalty_type' => $rule['penalty_type'],
-                'apply_per' => $rule['apply_per'],
-            ]);
+            return collect($request->input('rules'))->map(function ($rule) use ($companyId) {
+                return LatenessRule::create([
+                    'company_id' => $companyId,
+                    'tolerance_minutes' => $rule['tolerance_minutes'],
+                    'minutes_threshold' => $rule['minutes_threshold'],
+                    'penalty_value' => $rule['penalty_value'],
+                    'penalty_type' => $rule['penalty_type'],
+                    'apply_per' => $rule['apply_per'],
+                ]);
+            });
         });
 
         return $this->successResponse(
@@ -122,6 +127,10 @@ class PayrollController extends BaseApiController
      */
     public function generate(GeneratePayslipsRequest $request): JsonResponse
     {
+        if (! $this->authorizeCompanyAccess($request->input('company_id'))) {
+            return $this->errorResponse('Accès non autorisé', 403);
+        }
+
         $payslips = $this->payrollService->generatePayslips(
             companyId: $request->input('company_id'),
             periodStart: $request->input('period_start'),
@@ -132,7 +141,7 @@ class PayrollController extends BaseApiController
 
         return $this->successResponse(
             PayslipResource::collection($payslips),
-            $payslips->count().' fiche(s) de paie generee(s)'
+            $payslips->count().' fiche(s) de paie générée(s)'
         );
     }
 
@@ -167,6 +176,10 @@ class PayrollController extends BaseApiController
     {
         $payslip = Payslip::with(['employee', 'company', 'site', 'department'])->findOrFail($id);
 
+        if (! $this->authorizeCompanyAccess($payslip->company_id)) {
+            return $this->errorResponse('Accès non autorisé', 403);
+        }
+
         return $this->resourceResponse(new PayslipResource($payslip));
     }
 
@@ -177,10 +190,15 @@ class PayrollController extends BaseApiController
     public function validate(string $id): JsonResponse
     {
         $payslip = Payslip::findOrFail($id);
+
+        if (! $this->authorizeCompanyAccess($payslip->company_id)) {
+            return $this->errorResponse('Accès non autorisé', 403);
+        }
+
         $payslip->update(['status' => 'validated']);
         $payslip->load(['employee', 'company', 'site', 'department']);
 
-        return $this->resourceResponse(new PayslipResource($payslip), 'Fiche de paie validee');
+        return $this->resourceResponse(new PayslipResource($payslip), 'Fiche de paie validée');
     }
 
     // =========================================================================

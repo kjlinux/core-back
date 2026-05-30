@@ -17,17 +17,17 @@ class ForgotPasswordController extends BaseApiController
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user) {
+        if (! $user) {
             // Return success even if user not found to prevent email enumeration
-            return $this->successResponse(null, 'Si cet email existe, un lien de reinitialisation a ete envoye.');
+            return $this->successResponse(null, 'Si cet email existe, un lien de réinitialisation a été envoyé.');
         }
 
         $status = Password::sendResetLink(['email' => $request->email]);
 
         if ($status === Password::RESET_LINK_SENT) {
-            return $this->successResponse(null, 'Si cet email existe, un lien de reinitialisation a ete envoye.');
+            return $this->successResponse(null, 'Si cet email existe, un lien de réinitialisation a été envoyé.');
         }
 
-        return $this->errorResponse('Impossible d\'envoyer le lien de reinitialisation.', 500);
+        return $this->errorResponse('Impossible d\'envoyer le lien de réinitialisation.', 500);
     }
 }

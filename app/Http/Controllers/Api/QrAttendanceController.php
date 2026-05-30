@@ -64,7 +64,7 @@ class QrAttendanceController extends BaseApiController
 
         if (! $employee) {
             return $this->errorResponse(
-                'Appareil non reconnu. Veuillez enroler votre telephone aupres de votre responsable.',
+                'Appareil non reconnu. Veuillez enrôler votre téléphone auprès de votre responsable.',
                 403
             );
         }
@@ -114,7 +114,7 @@ class QrAttendanceController extends BaseApiController
             $exitTime = now();
             $exitStatus = $existing->status;
 
-            $schedule = $resolver->resolveForEmployee($qrCode->company_id, $employee->department_id, $exitTime);
+            $schedule = $resolver->resolveForEmployee($qrCode->company_id, $employee->department_id, $exitTime, $employee->schedule_id);
 
             if ($schedule && $resolver->calculateEarlyDepartureMinutes($schedule, $exitTime) > 0) {
                 $exitStatus = 'left_early';
@@ -133,7 +133,7 @@ class QrAttendanceController extends BaseApiController
 
             return $this->resourceResponse(
                 new \App\Http\Resources\QrAttendanceRecordResource($existing),
-                'Sortie enregistree'
+                'Sortie enregistrée'
             );
         }
 
@@ -141,7 +141,7 @@ class QrAttendanceController extends BaseApiController
         $entryTime = now();
         $status = 'present';
 
-        $schedule = $resolver->resolveForEmployee($qrCode->company_id, $employee->department_id, $entryTime);
+        $schedule = $resolver->resolveForEmployee($qrCode->company_id, $employee->department_id, $entryTime, $employee->schedule_id);
 
         if ($schedule && $resolver->calculateLateMinutes($schedule, $entryTime) > 0) {
             $status = 'late';
@@ -166,7 +166,7 @@ class QrAttendanceController extends BaseApiController
 
         return $this->resourceResponse(
             new \App\Http\Resources\QrAttendanceRecordResource($record),
-            'Entree enregistree',
+            'Entrée enregistrée',
             201
         );
     }

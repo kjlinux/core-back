@@ -15,13 +15,25 @@ return new class extends Migration
         });
 
         // Anciennes colonnes plates : rendues nullables (le nouveau modele utilise days)
-        DB::statement('ALTER TABLE schedules ALTER COLUMN start_time DROP NOT NULL');
-        DB::statement('ALTER TABLE schedules ALTER COLUMN end_time DROP NOT NULL');
-        DB::statement('ALTER TABLE schedules ALTER COLUMN work_days DROP NOT NULL');
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('ALTER TABLE schedules ALTER COLUMN start_time DROP NOT NULL');
+            DB::statement('ALTER TABLE schedules ALTER COLUMN end_time DROP NOT NULL');
+            DB::statement('ALTER TABLE schedules ALTER COLUMN work_days DROP NOT NULL');
 
-        // Elargir le type pour inclure day / night
-        DB::statement('ALTER TABLE schedules DROP CONSTRAINT IF EXISTS schedules_type_check');
-        DB::statement("ALTER TABLE schedules ADD CONSTRAINT schedules_type_check CHECK (type IN ('standard','custom','day','night'))");
+            // Elargir le type pour inclure day / night
+            DB::statement('ALTER TABLE schedules DROP CONSTRAINT IF EXISTS schedules_type_check');
+            DB::statement("ALTER TABLE schedules ADD CONSTRAINT schedules_type_check CHECK (type IN ('standard','custom','day','night'))");
+        } else {
+            // sqlite (tests) : pas de DROP NOT NULL ni de CHECK. On rend les colonnes plates
+            // nullables et on remplace l'enum 'type' (standard/custom) par une string libre
+            // pour accepter day/night.
+            Schema::table('schedules', function (Blueprint $table) {
+                $table->time('start_time')->nullable()->change();
+                $table->time('end_time')->nullable()->change();
+                $table->json('work_days')->nullable()->change();
+                $table->string('type')->default('standard')->change();
+            });
+        }
     }
 
     public function down(): void
@@ -30,7 +42,9 @@ return new class extends Migration
             $table->dropColumn(['default_late_tolerance', 'days']);
         });
 
-        DB::statement('ALTER TABLE schedules DROP CONSTRAINT IF EXISTS schedules_type_check');
-        DB::statement("ALTER TABLE schedules ADD CONSTRAINT schedules_type_check CHECK (type IN ('standard','custom'))");
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('ALTER TABLE schedules DROP CONSTRAINT IF EXISTS schedules_type_check');
+            DB::statement("ALTER TABLE schedules ADD CONSTRAINT schedules_type_check CHECK (type IN ('standard','custom'))");
+        }
     }
 };

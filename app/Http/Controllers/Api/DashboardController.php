@@ -162,7 +162,7 @@ class DashboardController extends BaseApiController
         }
         $currentEmployees = (clone $empQuery)->where('created_at', '>=', $currentStart)->count();
         $previousEmployees = (clone $empQuery)->whereBetween('created_at', [$previousStart, $previousEnd])->count();
-        $trends[] = $this->buildTrend('Employes', $currentEmployees, $previousEmployees);
+        $trends[] = $this->buildTrend('Employés', $currentEmployees, $previousEmployees);
 
         // Orders trend
         $orderQuery = Order::query();
@@ -317,7 +317,7 @@ class DashboardController extends BaseApiController
         if ($isSuperAdmin) {
             $companiesByModule = [
                 ['label' => 'Pointage RFID', 'value' => Company::where('is_active', true)->count()],
-                ['label' => 'Biometrique',   'value' => BiometricDevice::distinct('company_id')->count('company_id')],
+                ['label' => 'Biométrique',   'value' => BiometricDevice::distinct('company_id')->count('company_id')],
                 ['label' => 'Feelback',      'value' => FeelbackDevice::distinct('company_id')->count('company_id')],
             ];
         }

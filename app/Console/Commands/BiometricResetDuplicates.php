@@ -164,7 +164,7 @@ class BiometricResetDuplicates extends Command
                     'user_name' => 'system',
                     'action' => 'device_wipe_sent',
                     'target' => $device->serial_number,
-                    'details' => 'CMD_DELETE_ALL envoye apres detection doublons',
+                    'details' => 'CMD_DELETE_ALL envoyé après détection doublons',
                 ]);
             } catch (\Exception $e) {
                 $this->error("Echec publish sur {$responseTopic}: {$e->getMessage()}");

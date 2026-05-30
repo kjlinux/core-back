@@ -4,15 +4,24 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\ClientFollowupCall;
 use App\Models\InstallationSheet;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
 
 class InstallationSheetController extends BaseApiController
 {
+    private const SOLUTION_LABELS = [
+        'presenseRH_rfid' => 'PresenseRH - RFID',
+        'presenseRH_fp' => 'PresenseRH - Empreinte',
+        'presenseRH_qr' => 'PresenseRH - QR Code',
+        'feelback' => 'Feelback',
+    ];
+
     public function index(Request $request): JsonResponse
     {
         $query = InstallationSheet::with(['company', 'technician'])->latest('installed_at');
@@ -22,13 +31,41 @@ class InstallationSheetController extends BaseApiController
         if ($request->filled('company_id')) {
             $query->where('company_id', $request->input('company_id'));
         }
+
         return $this->paginatedResponse($query->paginate(20));
     }
 
     public function show(string $id): JsonResponse
     {
         $sheet = InstallationSheet::with(['company', 'technician', 'followups'])->findOrFail($id);
+
         return $this->successResponse($sheet);
+    }
+
+    public function pdf(string $id): Response
+    {
+        $sheet = InstallationSheet::with(['company', 'technician', 'followups'])->findOrFail($id);
+
+        $reference = strtoupper(substr($sheet->id, 0, 8));
+
+        $pdf = Pdf::loadView('pdf.installation-sheet', [
+            'sheet' => $sheet,
+            'reference' => $reference,
+            'solutionLabels' => self::SOLUTION_LABELS,
+            'clientSignature' => $this->signatureDataUri($sheet->client_signature_path),
+            'technicianSignature' => $this->signatureDataUri($sheet->technician_signature_path),
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->stream("fiche-installation-{$reference}.pdf");
+    }
+
+    protected function signatureDataUri(?string $path): ?string
+    {
+        if (! $path || ! Storage::disk('public')->exists($path)) {
+            return null;
+        }
+
+        return 'data:image/png;base64,'.base64_encode(Storage::disk('public')->get($path));
     }
 
     public function store(Request $request): JsonResponse
@@ -40,13 +77,14 @@ class InstallationSheetController extends BaseApiController
             'client_phone' => 'nullable|string|max:64',
             'client_email' => 'nullable|email|max:255',
             'site_address' => 'nullable|string|max:500',
-            'solution' => 'required|in:' . implode(',', InstallationSheet::SOLUTIONS),
-            'serial_number' => 'required|string|max:128',
-            'quantity' => 'nullable|string|max:128',
-            'firmware_version' => 'nullable|string|max:64',
-            'wifi_ssid' => 'nullable|string|max:128',
-            'static_ip' => 'nullable|string|max:64',
-            'remote_access' => 'nullable|string|max:64',
+            'materials' => 'required|array|min:1',
+            'materials.*.solution' => 'required|in:'.implode(',', InstallationSheet::SOLUTIONS),
+            'materials.*.serial_number' => 'required|string|max:128',
+            'materials.*.quantity' => 'nullable|string|max:128',
+            'materials.*.firmware_version' => 'nullable|string|max:64',
+            'materials.*.wifi_ssid' => 'nullable|string|max:128',
+            'materials.*.static_ip' => 'nullable|string|max:64',
+            'materials.*.remote_access' => 'nullable|string|max:64',
             'checklist' => 'required|array',
             'training_rating' => 'nullable|integer|min:1|max:5',
             'observations' => 'nullable|string|max:5000',
@@ -84,8 +122,9 @@ class InstallationSheetController extends BaseApiController
         if ($bin === false) {
             abort(422, 'Signature invalide');
         }
-        $path = sprintf('installation-signatures/%s/%s.png', now()->format('Y/m'), $kind . '-' . Str::uuid());
+        $path = sprintf('installation-signatures/%s/%s.png', now()->format('Y/m'), $kind.'-'.Str::uuid());
         Storage::disk('public')->put($path, $bin);
+
         return $path;
     }
 

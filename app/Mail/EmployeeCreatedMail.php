@@ -23,7 +23,7 @@ class EmployeeCreatedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Bienvenue sur Core Tanga Group - Vos informations de connexion',
+            subject: 'Bienvenue sur Tangaflow - Vos informations de connexion',
         );
     }
 

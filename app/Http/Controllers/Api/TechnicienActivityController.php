@@ -36,7 +36,7 @@ class TechnicienActivityController extends BaseApiController
                 $query->where('company_id', $companyId);
             }
         } else {
-            return $this->errorResponse('Acces refuse', 403);
+            return $this->errorResponse('Accès refusé', 403);
         }
 
         if ($request->filled('resource_type')) {
@@ -63,8 +63,8 @@ class TechnicienActivityController extends BaseApiController
     public function summaryByCompany(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isSuperAdmin()) {
-            return $this->errorResponse('Acces reserve au super admin', 403);
+        if (! $user->isSuperAdmin()) {
+            return $this->errorResponse('Accès réservé au super admin', 403);
         }
 
         $request->validate([
@@ -75,7 +75,7 @@ class TechnicienActivityController extends BaseApiController
 
         // Techniciens ayant travaille sur cette entreprise
         $techniciens = User::where('role', 'technicien')
-            ->whereHas('activityLogs', fn($q) => $q->where('company_id', $companyId))
+            ->whereHas('activityLogs', fn ($q) => $q->where('company_id', $companyId))
             ->get(['id', 'first_name', 'last_name', 'email']);
 
         $technicienIds = $techniciens->pluck('id');
@@ -101,16 +101,16 @@ class TechnicienActivityController extends BaseApiController
 
             return [
                 'technicien' => [
-                    'id'        => (string) $tech->id,
-                    'fullName'  => trim($tech->first_name . ' ' . $tech->last_name),
-                    'email'     => $tech->email,
+                    'id' => (string) $tech->id,
+                    'fullName' => trim($tech->first_name.' '.$tech->last_name),
+                    'email' => $tech->email,
                 ],
-                'totalActions'  => $row ? (int) $row->total : 0,
-                'lastActivity'  => $row?->last_at,
-                'breakdown'     => $logs->map(fn ($l) => [
+                'totalActions' => $row ? (int) $row->total : 0,
+                'lastActivity' => $row?->last_at,
+                'breakdown' => $logs->map(fn ($l) => [
                     'resourceType' => $l->resource_type,
-                    'action'       => $l->action,
-                    'count'        => (int) $l->count,
+                    'action' => $l->action,
+                    'count' => (int) $l->count,
                 ])->values(),
             ];
         });
@@ -124,8 +124,8 @@ class TechnicienActivityController extends BaseApiController
     public function companiesByTechnicien(Request $request, string $technicienId): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isSuperAdmin()) {
-            return $this->errorResponse('Acces reserve au super admin', 403);
+        if (! $user->isSuperAdmin()) {
+            return $this->errorResponse('Accès réservé au super admin', 403);
         }
 
         $companies = TechnicienActivityLog::where('technicien_id', $technicienId)
@@ -133,9 +133,9 @@ class TechnicienActivityController extends BaseApiController
             ->selectRaw('company_id, count(*) as total_actions, max(created_at) as last_activity')
             ->groupBy('company_id')
             ->get()
-            ->map(fn($row) => [
+            ->map(fn ($row) => [
                 'company' => [
-                    'id'   => (string) $row->company_id,
+                    'id' => (string) $row->company_id,
                     'name' => $row->company?->name,
                 ],
                 'totalActions' => $row->total_actions,

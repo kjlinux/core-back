@@ -2,16 +2,18 @@
 
 namespace App\Services;
 
-use App\Models\AbsenceRequest;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\PayrollConfig;
 use App\Models\Payslip;
+use App\Support\Concerns\CountsApprovedLeaveDays;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
 class PayrollService
 {
+    use CountsApprovedLeaveDays;
+
     /**
      * Genere (ou regenere) les fiches de paie pour tous les employes
      * correspondant aux filtres, sur la periode donnee.
@@ -111,6 +113,7 @@ class PayrollService
             if (($r->status ?? null) === 'on_leave' || ($r->is_on_leave ?? false)) {
                 return 0;
             }
+
             return max(0, (int) ($r->late_minutes ?? 0));
         });
 
@@ -201,10 +204,10 @@ class PayrollService
     ): array {
         // Pour les modes horaires/journaliers, le brut de base est différent du taux unitaire
         $baseLabel = match ($paymentMode) {
-            'hourly'  => 'Salaire (taux horaire × heures)',
-            'daily'   => 'Salaire (taux journalier × jours)',
-            'weekly'  => 'Salaire (taux hebdomadaire × semaines)',
-            default   => 'Salaire de base',
+            'hourly' => 'Salaire (taux horaire × heures)',
+            'daily' => 'Salaire (taux journalier × jours)',
+            'weekly' => 'Salaire (taux hebdomadaire × semaines)',
+            default => 'Salaire de base',
         };
         // Le brut avant heures sup est : grossAmount - overtimeAmount
         $baseEarning = $grossAmount - $overtimeAmount;
@@ -264,30 +267,5 @@ class PayrollService
         }
 
         return min($deduction, $baseSalary); // cap: jamais plus que le salaire
-    }
-
-    /**
-     * Compte le nombre de jours distincts couverts par des demandes de conge
-     * approuvees pour cet employe sur la periode [$start, $end].
-     */
-    private function countApprovedLeaveDays(string $employeeId, Carbon $start, Carbon $end): int
-    {
-        $leaves = AbsenceRequest::where('employee_id', $employeeId)
-            ->where('status', 'approved')
-            ->where('date_start', '<=', $end->toDateString())
-            ->where('date_end', '>=', $start->toDateString())
-            ->get();
-
-        $days = [];
-        foreach ($leaves as $leave) {
-            $from = Carbon::parse($leave->date_start)->greaterThan($start) ? Carbon::parse($leave->date_start) : $start->copy();
-            $to = Carbon::parse($leave->date_end)->lessThan($end) ? Carbon::parse($leave->date_end) : $end->copy();
-            $cursor = $from->copy();
-            while ($cursor->lte($to)) {
-                $days[$cursor->toDateString()] = true;
-                $cursor->addDay();
-            }
-        }
-        return count($days);
     }
 }

@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\Department;
-use App\Http\Resources\DepartmentResource;
 use App\Http\Requests\Department\StoreDepartmentRequest;
 use App\Http\Requests\Department\UpdateDepartmentRequest;
+use App\Http\Resources\DepartmentResource;
+use App\Models\Department;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,7 +24,19 @@ class DepartmentController extends BaseApiController
             $q->where('site_id', $siteId);
         });
 
-        $perPage = $request->input('per_page', 15);
+        $query->when($request->input('search'), function ($q, $search) {
+            $q->where(function ($qq) use ($search) {
+                $qq->where('name', 'LIKE', "%{$search}%")
+                    ->orWhereHas('site', function ($sq) use ($search) {
+                        $sq->where('name', 'LIKE', "%{$search}%");
+                    })
+                    ->orWhereHas('company', function ($cq) use ($search) {
+                        $cq->where('name', 'LIKE', "%{$search}%");
+                    });
+            });
+        });
+
+        $perPage = (int) $request->input('per_page', 15);
         $departments = $query->paginate($perPage);
 
         return $this->paginatedResponse(DepartmentResource::collection($departments));
@@ -41,7 +53,7 @@ class DepartmentController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $department->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
@@ -56,7 +68,7 @@ class DepartmentController extends BaseApiController
         $data = $this->enforceCompanyId($request->validated());
         $department = Department::create($data);
 
-        return $this->resourceResponse(new DepartmentResource($department), 'Departement cree avec succes', 201);
+        return $this->resourceResponse(new DepartmentResource($department), 'Département créé avec succès', 201);
     }
 
     /**
@@ -67,7 +79,7 @@ class DepartmentController extends BaseApiController
         $department = Department::findOrFail($id);
         $department->update($request->validated());
 
-        return $this->resourceResponse(new DepartmentResource($department), 'Departement mis a jour avec succes');
+        return $this->resourceResponse(new DepartmentResource($department), 'Département mis à jour avec succès');
     }
 
     /**

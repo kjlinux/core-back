@@ -20,7 +20,7 @@ class UserUpdatedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Core Tanga Group - Mise a jour de votre compte',
+            subject: 'Tangaflow - Mise à jour de votre compte',
         );
     }
 

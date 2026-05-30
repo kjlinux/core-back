@@ -16,9 +16,9 @@ class EmployeeDeviceController extends BaseApiController
     public function enroll(Request $request): JsonResponse
     {
         $request->validate([
-            'employee_id'        => 'required|uuid|exists:employees,id',
+            'employee_id' => 'required|uuid|exists:employees,id',
             'device_fingerprint' => 'required|string|max:64',
-            'device_info'        => 'nullable|string|max:255',
+            'device_info' => 'nullable|string|max:255',
         ]);
 
         // Vérifier que le fingerprint n'est pas déjà utilisé par un autre employé
@@ -28,7 +28,7 @@ class EmployeeDeviceController extends BaseApiController
 
         if ($conflict) {
             return $this->errorResponse(
-                'Cet appareil est deja enrole pour un autre employe.',
+                'Cet appareil est déjà enrôlé pour un autre employé.',
                 409
             );
         }
@@ -36,17 +36,17 @@ class EmployeeDeviceController extends BaseApiController
         $employee = Employee::findOrFail($request->input('employee_id'));
 
         $employee->update([
-            'device_fingerprint'  => $request->input('device_fingerprint'),
-            'device_info'         => $request->input('device_info'),
-            'device_enrolled_at'  => now(),
+            'device_fingerprint' => $request->input('device_fingerprint'),
+            'device_info' => $request->input('device_info'),
+            'device_enrolled_at' => now(),
         ]);
 
         return $this->successResponse([
-            'employeeId'       => $employee->id,
-            'employeeName'     => $employee->first_name . ' ' . $employee->last_name,
-            'deviceInfo'       => $employee->device_info,
+            'employeeId' => $employee->id,
+            'employeeName' => $employee->first_name.' '.$employee->last_name,
+            'deviceInfo' => $employee->device_info,
             'deviceEnrolledAt' => $employee->device_enrolled_at?->toISOString(),
-        ], 'Appareil enrole avec succes');
+        ], 'Appareil enrôlé avec succès');
     }
 
     /**
@@ -58,11 +58,11 @@ class EmployeeDeviceController extends BaseApiController
 
         $employee->update([
             'device_fingerprint' => null,
-            'device_info'        => null,
+            'device_info' => null,
             'device_enrolled_at' => null,
         ]);
 
-        return $this->successResponse(null, 'Appareil revoque avec succes');
+        return $this->successResponse(null, 'Appareil révoqué avec succès');
     }
 
     /**
@@ -74,24 +74,24 @@ class EmployeeDeviceController extends BaseApiController
     {
         $request->validate([
             'device_fingerprint' => 'required|string|max:64',
-            'device_info'        => 'nullable|string|max:255',
+            'device_info' => 'nullable|string|max:255',
         ]);
 
         $employee = Employee::where('device_fingerprint', $request->input('device_fingerprint'))
             ->first();
 
-        if (!$employee) {
+        if (! $employee) {
             return $this->successResponse([
-                'enrolled'    => false,
-                'employeeId'  => null,
+                'enrolled' => false,
+                'employeeId' => null,
                 'employeeName' => null,
             ]);
         }
 
         return $this->successResponse([
-            'enrolled'     => true,
-            'employeeId'   => $employee->id,
-            'employeeName' => $employee->first_name . ' ' . $employee->last_name,
+            'enrolled' => true,
+            'employeeId' => $employee->id,
+            'employeeName' => $employee->first_name.' '.$employee->last_name,
         ]);
     }
 }

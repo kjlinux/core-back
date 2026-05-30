@@ -27,7 +27,7 @@
       </td>
     </tr>
     <tr>
-      <td>Publie le</td>
+      <td>Publié le</td>
       <td>{{ $firmware->published_at?->format('d/m/Y \a H:i') }}</td>
     </tr>
     @if($firmware->description)
@@ -45,7 +45,7 @@
 </p>
 
 <div style="text-align:center;">
-  <a href="{{ config('app.url') }}" class="btn">Se connecter et mettre a jour</a>
+  <a href="{{ config('app.url') }}" class="btn">Se connecter et mettre à jour</a>
 </div>
 
 <hr class="divider">

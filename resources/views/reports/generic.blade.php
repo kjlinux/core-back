@@ -30,7 +30,7 @@
                     @endforeach
                 </tr>
             @empty
-                <tr><td colspan="{{ count($headers) }}">Aucune donnee.</td></tr>
+                <tr><td colspan="{{ count($headers) }}">Aucune donnée.</td></tr>
             @endforelse
         </tbody>
     </table>

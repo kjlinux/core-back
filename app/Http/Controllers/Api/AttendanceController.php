@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Resources\AttendanceRecordResource;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
-use App\Http\Resources\AttendanceRecordResource;
 use App\Services\AttendanceEvaluationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,9 +12,7 @@ use Illuminate\Support\Carbon;
 
 class AttendanceController extends BaseApiController
 {
-    public function __construct(protected AttendanceEvaluationService $evaluator)
-    {
-    }
+    public function __construct(protected AttendanceEvaluationService $evaluator) {}
 
     /**
      * Get attendance records for a specific date with stats.
@@ -96,7 +94,7 @@ class AttendanceController extends BaseApiController
 
             return [
                 'employee_id' => $employeeRecords->first()->employee_id,
-                'employee_name' => $employee ? $employee->first_name . ' ' . $employee->last_name : null,
+                'employee_name' => $employee ? $employee->first_name.' '.$employee->last_name : null,
                 'employee_number' => $employee ? $employee->employee_number : null,
                 'department' => $employee && $employee->department ? $employee->department->name : null,
                 'totalDays' => $totalDays,
@@ -130,7 +128,7 @@ class AttendanceController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $employee->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
@@ -164,7 +162,7 @@ class AttendanceController extends BaseApiController
                     ->where('company_id', $companyId)
                     ->exists();
                 if (! $deptExists) {
-                    return $this->errorResponse('Acces non autorise', 403);
+                    return $this->errorResponse('Accès non autorisé', 403);
                 }
             }
         }
@@ -217,7 +215,7 @@ class AttendanceController extends BaseApiController
 
             return [
                 'employee_id' => $employeeRecords->first()->employee_id,
-                'employee_name' => $employee ? $employee->first_name . ' ' . $employee->last_name : null,
+                'employee_name' => $employee ? $employee->first_name.' '.$employee->last_name : null,
                 'employee_number' => $employee ? $employee->employee_number : null,
                 'department' => $employee && $employee->department ? $employee->department->name : null,
                 'totalDays' => $totalDays,

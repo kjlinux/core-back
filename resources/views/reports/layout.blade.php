@@ -25,14 +25,14 @@
         <h1>{{ $title }}</h1>
         <div class="meta">
             @if(!empty($subtitle)){{ $subtitle }} — @endif
-            Genere le {{ now()->format('d/m/Y H:i') }}
+            Généré le {{ now()->format('d/m/Y H:i') }}
         </div>
     </div>
     <div class="content">
         @yield('content')
     </div>
     <div class="footer">
-        Document genere automatiquement — {{ config('app.name') }}
+        Document généré automatiquement — {{ config('app.name') }}
     </div>
 </body>
 </html>

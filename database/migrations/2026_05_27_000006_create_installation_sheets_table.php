@@ -39,7 +39,10 @@ return new class extends Migration
             $table->index('serial_number');
         });
 
-        DB::statement("ALTER TABLE installation_sheets ADD CONSTRAINT installation_sheets_solution_check CHECK (solution IN ('presenseRH_rfid','presenseRH_fp','presenseRH_qr','feelback','smartcard','kuilinga'))");
+        // Contrainte CHECK specifique a PostgreSQL ; ignoree sur sqlite (tests).
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE installation_sheets ADD CONSTRAINT installation_sheets_solution_check CHECK (solution IN ('presenseRH_rfid','presenseRH_fp','presenseRH_qr','feelback','smartcard','kuilinga'))");
+        }
     }
 
     public function down(): void

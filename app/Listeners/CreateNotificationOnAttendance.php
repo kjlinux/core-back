@@ -14,16 +14,16 @@ class CreateNotificationOnAttendance implements ShouldHandleEventsAfterCommit
     {
         $record = $event->record;
         $employee = $record->employee;
-        $sourceName = $record->source === 'rfid' ? 'RFID' : 'Biometrique';
+        $sourceName = $record->source === 'rfid' ? 'RFID' : 'Biométrique';
 
         $statusLabels = [
-            'present' => 'Present',
+            'present' => 'Présent',
             'late' => 'En retard',
-            'left_early' => 'Depart anticipe',
+            'left_early' => 'Départ anticipé',
         ];
 
         $statusLabel = $statusLabels[$record->status] ?? $record->status;
-        $action = $record->exit_time ? 'Sortie' : 'Entree';
+        $action = $record->exit_time ? 'Sortie' : 'Entrée';
 
         $title = "Pointage {$sourceName} - {$action}";
         $message = "{$employee->full_name} - {$statusLabel} ({$sourceName})";

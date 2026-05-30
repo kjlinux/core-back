@@ -4,26 +4,44 @@ namespace App\Services;
 
 use App\Models\Schedule;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 
 class ScheduleResolverService
 {
     /**
      * Trouve l'horaire applicable pour un employé à un instant donné.
      *
-     * Priorité : horaire assigné au département de l'employé, puis horaire global
-     * de l'entreprise (assigned_departments vide). work_days est respecté : un
-     * horaire dont le jour courant est absent de work_days est ignoré.
-     * Quand plusieurs candidats subsistent, on sélectionne celui dont la plage
-     * horaire contient l'heure actuelle ; sinon on retourne le premier.
+     * Priorité : horaire individuel de l'employé (schedule_id), puis horaire
+     * assigné à son département. Un horaire sans département (assigned_departments
+     * vide) est considéré comme individuel : il ne s'applique JAMAIS automatiquement,
+     * uniquement via schedule_id. work_days est respecté : un horaire dont le jour
+     * courant est absent de work_days est ignoré. Quand plusieurs candidats
+     * subsistent, on sélectionne celui dont la plage horaire contient l'heure
+     * actuelle ; sinon on retourne le premier.
+     *
+     * @param  Collection<int, Schedule>|null  $preloadedSchedules  horaires de la société déjà
+     *                                                              chargés (évite une requête par appel lors d'une résolution en boucle).
      */
-    public function resolveForEmployee(string $companyId, ?string $departmentId, Carbon $at): ?Schedule
+    public function resolveForEmployee(string $companyId, ?string $departmentId, Carbon $at, ?string $scheduleId = null, ?Collection $preloadedSchedules = null): ?Schedule
     {
         $dayOfWeek = $at->isoWeekday(); // 1=Lun … 7=Dim (ISO 8601)
 
         // Charger une seule fois tous les horaires de la société puis filtrer en PHP
-        // (les entreprises ont rarement plus d'une vingtaine d'horaires).
-        $candidates = Schedule::where('company_id', $companyId)
-            ->get()
+        // (les entreprises ont rarement plus d'une vingtaine d'horaires). Quand l'appelant
+        // résout en boucle (ex. jours ouvrés d'une période), il précharge la collection.
+        $companySchedules = $preloadedSchedules ?? Schedule::where('company_id', $companyId)->get();
+
+        // Horaire individuel prioritaire : s'il appartient à la société, il
+        // l'emporte sur le département, quel que soit work_days (cohérent avec
+        // AttendanceEvaluationService et le front resolveEmployeeSchedule).
+        if ($scheduleId !== null) {
+            $direct = $companySchedules->firstWhere('id', $scheduleId);
+            if ($direct !== null) {
+                return $direct;
+            }
+        }
+
+        $candidates = $companySchedules
             ->filter(function (Schedule $schedule) use ($departmentId, $dayOfWeek) {
                 if (! $this->isActiveOnDay($schedule, $dayOfWeek)) {
                     return false;
@@ -31,9 +49,10 @@ class ScheduleResolverService
 
                 $assigned = $schedule->assigned_departments ?? [];
 
-                // Horaire global (aucun département assigné) → applicable à tous
+                // Horaire sans département → individuel uniquement (via schedule_id, traité
+                // plus haut). Jamais appliqué automatiquement, donc écarté du pool par département.
                 if (empty($assigned)) {
-                    return true;
+                    return false;
                 }
 
                 // Horaire de département → ne s'applique que si le département correspond

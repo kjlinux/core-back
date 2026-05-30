@@ -21,7 +21,7 @@ class AuthController extends BaseApiController
         }
 
         if (! $user->is_active) {
-            return $this->errorResponse('Compte desactive', 403);
+            return $this->errorResponse('Compte désactivé', 403);
         }
 
         $accessToken = $user->createToken('access_token')->plainTextToken;
@@ -42,7 +42,7 @@ class AuthController extends BaseApiController
             $user->currentAccessToken()?->delete();
         }
 
-        return $this->successResponse(null, 'Deconnexion reussie');
+        return $this->successResponse(null, 'Déconnexion réussie');
     }
 
     public function refresh(Request $request): JsonResponse
@@ -86,6 +86,6 @@ class AuthController extends BaseApiController
         return $this->successResponse([
             'companyId' => (string) $company->id,
             'companyName' => $company->name,
-        ], 'Entreprise selectionnee');
+        ], 'Entreprise sélectionnée');
     }
 }

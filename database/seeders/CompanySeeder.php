@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class CompanySeeder extends Seeder
 {
@@ -19,6 +19,7 @@ class CompanySeeder extends Seeder
                 'email' => 'contact@orange.bf',
                 'phone' => '+226 25 30 60 00',
                 'address' => 'Avenue de la Nation, Ouagadougou',
+                'matricule_prefix' => 'ORG',
                 'subscription' => 'premium',
                 'is_active' => true,
                 'created_at' => $now,
@@ -30,6 +31,7 @@ class CompanySeeder extends Seeder
                 'email' => 'info@corisbank.bf',
                 'phone' => '+226 25 30 40 00',
                 'address' => 'Avenue Kwame Nkrumah, Ouagadougou',
+                'matricule_prefix' => 'CBI',
                 'subscription' => 'premium',
                 'is_active' => true,
                 'created_at' => $now,
@@ -41,6 +43,7 @@ class CompanySeeder extends Seeder
                 'email' => 'contact@onatel.bf',
                 'phone' => '+226 25 49 01 01',
                 'address' => 'Avenue de la Nation, Ouagadougou',
+                'matricule_prefix' => 'ONA',
                 'subscription' => 'premium',
                 'is_active' => true,
                 'created_at' => $now,
@@ -52,6 +55,7 @@ class CompanySeeder extends Seeder
                 'email' => 'info@sonabel.bf',
                 'phone' => '+226 25 30 61 00',
                 'address' => '55 Avenue de la Nation, Ouagadougou',
+                'matricule_prefix' => 'SNB',
                 'subscription' => 'freemium',
                 'is_active' => true,
                 'created_at' => $now,

@@ -1,18 +1,18 @@
 @component('mail::message')
-# Votre abonnement a expire
+# Votre abonnement a expiré
 
 Bonjour {{ $company->name }},
 
-Votre abonnement **{{ ucfirst($previousPlan) }}** TangaFlow a expire et votre compte est repasse au plan **Freemium**.
+Votre abonnement **{{ ucfirst($previousPlan) }}** TangaFlow a expiré et votre compte est repassé au plan **Freemium**.
 
-Les fonctionnalites suivantes ne sont plus accessibles : paie automatisee, rapports RH, mises a jour firmware OTA, support dedie.
+Les fonctionnalités suivantes ne sont plus accessibles : paie automatisée, rapports RH, mises à jour firmware OTA, support dédié.
 
 @component('mail::button', ['url' => rtrim(config('app.frontend_url') ?? config('app.url'), '/').'/abonnement'])
-Reactiver mon abonnement
+Réactiver mon abonnement
 @endcomponent
 
-Vos donnees sont conservees : un renouvellement les rend immediatement disponibles.
+Vos données sont conservées : un renouvellement les rend immédiatement disponibles.
 
-A bientot,
-**L'equipe TANGA GROUP**
+À bientôt,
+**L'équipe Tangaflow**
 @endcomponent

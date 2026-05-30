@@ -16,15 +16,15 @@ class TechnicienReportController extends BaseApiController
     {
         $user = $request->user();
         if (! $user || (! $user->isTechnicien() && ! $user->isSuperAdmin())) {
-            return $this->errorResponse('Acces reserve aux techniciens', 403);
+            return $this->errorResponse('Accès réservé aux techniciens', 403);
         }
 
         $validated = $request->validate([
-            'company_id'      => 'required|uuid|exists:companies,id',
-            'company_name'    => 'required|string|max:200',
+            'company_id' => 'required|uuid|exists:companies,id',
+            'company_name' => 'required|string|max:200',
             'technicien_name' => 'required|string|max:200',
-            'global_score'    => 'required|integer|min:0|max:100',
-            'payload'         => 'required|array',
+            'global_score' => 'required|integer|min:0|max:100',
+            'payload' => 'required|array',
             'payload.sections' => 'required|array',
         ]);
 
@@ -37,26 +37,26 @@ class TechnicienReportController extends BaseApiController
         }
 
         $payloadHash = TechnicienReport::canonicalHash($validated['payload']);
-        $signature   = TechnicienReport::sign($payloadHash);
+        $signature = TechnicienReport::sign($payloadHash);
 
         $report = TechnicienReport::create([
-            'user_id'         => $user->id,
-            'company_id'      => $validated['company_id'],
-            'company_name'    => $validated['company_name'],
+            'user_id' => $user->id,
+            'company_id' => $validated['company_id'],
+            'company_name' => $validated['company_name'],
             'technicien_name' => $validated['technicien_name'],
-            'global_score'    => $validated['global_score'],
-            'payload'         => $validated['payload'],
-            'payload_hash'    => $payloadHash,
-            'signature'       => $signature,
-            'signed_at'       => now(),
+            'global_score' => $validated['global_score'],
+            'payload' => $validated['payload'],
+            'payload_hash' => $payloadHash,
+            'signature' => $signature,
+            'signed_at' => now(),
         ]);
 
         return $this->successResponse([
-            'id'           => (string) $report->id,
-            'signature'    => $signature,
-            'payloadHash'  => $payloadHash,
-            'signedAt'     => $report->signed_at->toIso8601String(),
-            'verifyUrl'    => url("/api/technicien-reports/{$report->id}/verify"),
+            'id' => (string) $report->id,
+            'signature' => $signature,
+            'payloadHash' => $payloadHash,
+            'signedAt' => $report->signed_at->toIso8601String(),
+            'verifyUrl' => url("/api/technicien-reports/{$report->id}/verify"),
         ], 'Rapport signe', 201);
     }
 
@@ -72,17 +72,17 @@ class TechnicienReportController extends BaseApiController
         }
 
         $recomputedHash = TechnicienReport::canonicalHash($report->payload);
-        $recomputedSig  = TechnicienReport::sign($recomputedHash);
-        $valid          = hash_equals($report->signature, $recomputedSig)
+        $recomputedSig = TechnicienReport::sign($recomputedHash);
+        $valid = hash_equals($report->signature, $recomputedSig)
             && hash_equals($report->payload_hash, $recomputedHash);
 
         return $this->successResponse([
-            'valid'          => $valid,
-            'reportId'       => (string) $report->id,
-            'companyName'    => $report->company_name,
+            'valid' => $valid,
+            'reportId' => (string) $report->id,
+            'companyName' => $report->company_name,
             'technicienName' => $report->technicien_name,
-            'globalScore'    => $report->global_score,
-            'signedAt'       => $report->signed_at->toIso8601String(),
+            'globalScore' => $report->global_score,
+            'signedAt' => $report->signed_at->toIso8601String(),
         ]);
     }
 }

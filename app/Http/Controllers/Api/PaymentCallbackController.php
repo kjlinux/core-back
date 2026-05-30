@@ -15,9 +15,10 @@ use Illuminate\Support\Facades\Log;
 class PaymentCallbackController extends BaseApiController
 {
     /**
-     * Callback LigdiCash legacy (a supprimer en fin de migration).
+     * Callback LigdiCash — gere a la fois les commandes marketplace et les paiements d'abonnement,
+     * distingues via custom_data.type.
      */
-    public function handle(Request $request, LigdiCashService $ligdiCash): JsonResponse
+    public function handle(Request $request, LigdiCashService $ligdiCash, SubscriptionService $subs): JsonResponse
     {
         $data = $request->all();
         $rawBody = $request->getContent();
@@ -27,10 +28,18 @@ class PaymentCallbackController extends BaseApiController
             return $this->errorResponse('Callback invalide', 400);
         }
 
+        $token = $data['token'] ?? null;
+        $normalized = $ligdiCash->normalizeStatus((string) ($data['status'] ?? ''));
+        $type = $data['custom_data']['type'] ?? 'order';
+
+        if ($type === 'subscription_payment') {
+            return $this->processSubscriptionCallback($data, $token, $normalized, $subs);
+        }
+
         return $this->processOrderCallback(
-            orderId: $data['custom_data']['order_id'] ?? null,
-            token: $data['token'] ?? null,
-            normalizedStatus: $data['status'] ?? 'unknown',
+            orderId: $data['custom_data']['order_id'] ?? $data['custom_data']['reference'] ?? null,
+            token: $token,
+            normalizedStatus: $normalized,
         );
     }
 
@@ -83,6 +92,7 @@ class PaymentCallbackController extends BaseApiController
                     'order_id' => $orderId,
                     'stored_token_prefix' => substr((string) $order->payment_token, 0, 8),
                 ]);
+
                 return ['code' => 409, 'message' => 'Token de paiement incoherent'];
             }
 
@@ -119,7 +129,7 @@ class PaymentCallbackController extends BaseApiController
 
         if (! $paymentId) {
             // Fallback : retrouver via le token
-            $payment = $token ? SubscriptionPayment::where('intouch_token', $token)->first() : null;
+            $payment = $token ? SubscriptionPayment::where('gateway_token', $token)->first() : null;
         } else {
             $payment = SubscriptionPayment::find($paymentId);
         }
@@ -137,7 +147,7 @@ class PaymentCallbackController extends BaseApiController
         } elseif ($normalizedStatus === 'failed') {
             $payment->update([
                 'payment_status' => SubscriptionPayment::STATUS_FAILED,
-                'intouch_response' => $data,
+                'gateway_response' => $data,
             ]);
         }
 

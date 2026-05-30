@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Resources\CompanyResource;
 use App\Models\Company;
 use App\Models\SubscriptionPayment;
 use App\Services\Subscription\SubscriptionService;
@@ -12,24 +13,22 @@ use Illuminate\Support\Facades\DB;
 
 class AdminSubscriptionController extends BaseApiController
 {
-    public function __construct(protected SubscriptionService $service)
-    {
-    }
+    public function __construct(protected SubscriptionService $service) {}
 
-    public function index(Request $request): JsonResponse
+    public function index(): JsonResponse
     {
         $companies = Company::query()
-            ->select(['id', 'name', 'email', 'subscription', 'subscription_starts_at', 'subscription_expires_at', 'subscription_next_period_paid', 'subscription_next_expires_at', 'warranty_ends_at', 'is_active'])
             ->orderBy('name')
             ->paginate(50);
-        return $this->paginatedResponse($companies);
+
+        return $this->paginatedResponse(CompanyResource::collection($companies));
     }
 
     public function update(Request $request, string $companyId): JsonResponse
     {
         $data = $request->validate([
-            'plan_code'        => 'required|in:freemium,garantie,premium',
-            'expires_at'       => 'nullable|date',
+            'plan_code' => 'required|in:freemium,garantie,premium',
+            'expires_at' => 'nullable|date',
             'warranty_ends_at' => 'nullable|date',
         ]);
 

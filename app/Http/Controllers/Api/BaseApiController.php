@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Http\Resources\Json\ResourceCollection;
@@ -27,12 +28,20 @@ class BaseApiController extends Controller
         ], $status);
     }
 
-    protected function paginatedResponse(ResourceCollection $collection): JsonResponse
+    protected function paginatedResponse(ResourceCollection|LengthAwarePaginator $collection): JsonResponse
     {
-        $paginator = $collection->resource;
+        // Accepte soit une ResourceCollection (dont ->resource est le paginator),
+        // soit un LengthAwarePaginator brut (->paginate() sans resource dediee).
+        if ($collection instanceof ResourceCollection) {
+            $paginator = $collection->resource;
+            $data = $collection;
+        } else {
+            $paginator = $collection;
+            $data = $collection->items();
+        }
 
         return response()->json([
-            'data' => $collection,
+            'data' => $data,
             'meta' => [
                 'currentPage' => $paginator->currentPage(),
                 'perPage' => $paginator->perPage(),
@@ -108,7 +117,7 @@ class BaseApiController extends Controller
         if ($user->isTechnicien()) {
             $resolved = $activeCompanyId ?: $user->company_id;
             if (! $resolved) {
-                abort(403, 'Technicien: aucune entreprise active selectionnee.');
+                abort(403, 'Technicien : aucune entreprise active sélectionnée.');
             }
 
             return $resolved;

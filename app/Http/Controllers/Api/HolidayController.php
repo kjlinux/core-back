@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\Holiday;
-use App\Http\Resources\HolidayResource;
 use App\Http\Requests\Holiday\StoreHolidayRequest;
 use App\Http\Requests\Holiday\UpdateHolidayRequest;
+use App\Http\Resources\HolidayResource;
+use App\Models\Holiday;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -20,7 +20,15 @@ class HolidayController extends BaseApiController
 
         $this->scopeByCompany($query);
 
-        $perPage = $request->input('per_page', 15);
+        $query->when($request->input('search'), function ($q, $search) {
+            $q->where('name', 'LIKE', "%{$search}%");
+        });
+
+        $query->when($request->input('year'), function ($q, $year) {
+            $q->whereYear('date', $year);
+        });
+
+        $perPage = (int) $request->input('per_page', 15);
         $holidays = $query->paginate($perPage);
 
         return $this->paginatedResponse(HolidayResource::collection($holidays));
@@ -34,7 +42,7 @@ class HolidayController extends BaseApiController
         $data = $this->enforceCompanyId($request->validated());
         $holiday = Holiday::create($data);
 
-        return $this->resourceResponse(new HolidayResource($holiday), 'Jour ferie cree avec succes', 201);
+        return $this->resourceResponse(new HolidayResource($holiday), 'Jour férié créé avec succès', 201);
     }
 
     /**
@@ -48,13 +56,13 @@ class HolidayController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $holiday->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
         $holiday->update($request->validated());
 
-        return $this->resourceResponse(new HolidayResource($holiday), 'Jour ferie mis a jour avec succes');
+        return $this->resourceResponse(new HolidayResource($holiday), 'Jour férié mis à jour avec succès');
     }
 
     /**
@@ -68,7 +76,7 @@ class HolidayController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $holiday->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 

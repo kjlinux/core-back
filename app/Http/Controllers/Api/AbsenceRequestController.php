@@ -40,6 +40,7 @@ class AbsenceRequestController extends BaseApiController
     {
         $req = AbsenceRequest::with('employee')->findOrFail($id);
         $this->assertCanAccess($req);
+
         return $this->resourceResponse(new AbsenceRequestResource($req));
     }
 
@@ -47,12 +48,13 @@ class AbsenceRequestController extends BaseApiController
     {
         $employeeId = $request->input('employee_id') ?? optional($request->user())->employee_id;
         if (! $employeeId) {
-            return $this->errorResponse('Aucun employe associe au compte', 400);
+            return $this->errorResponse('Aucun employé associé au compte', 400);
         }
         $items = AbsenceRequest::with('employee')
             ->where('employee_id', $employeeId)
             ->orderByDesc('created_at')
             ->get();
+
         return $this->successResponse(AbsenceRequestResource::collection($items));
     }
 
@@ -77,7 +79,8 @@ class AbsenceRequestController extends BaseApiController
         unset($data['justificatif']);
 
         $req = AbsenceRequest::create($data);
-        return $this->resourceResponse(new AbsenceRequestResource($req->load('employee')), 'Demande creee', 201);
+
+        return $this->resourceResponse(new AbsenceRequestResource($req->load('employee')), 'Demande créée', 201);
     }
 
     public function update(Request $request, string $id): JsonResponse
@@ -98,7 +101,8 @@ class AbsenceRequestController extends BaseApiController
         }
 
         $req->update($data);
-        return $this->resourceResponse(new AbsenceRequestResource($req->fresh('employee')), 'Demande mise a jour');
+
+        return $this->resourceResponse(new AbsenceRequestResource($req->fresh('employee')), 'Demande mise à jour');
     }
 
     public function review(Request $request, string $id): JsonResponse
@@ -126,17 +130,22 @@ class AbsenceRequestController extends BaseApiController
         $req = AbsenceRequest::findOrFail($id);
         $this->assertCanAccess($req);
         $req->delete();
+
         return $this->noContentResponse();
     }
 
     private function assertCanAccess(AbsenceRequest $req): void
     {
         $user = auth()->user();
-        if (! $user) abort(401);
-        if ($user->isSuperAdmin() || $user->isSupportIt()) return;
+        if (! $user) {
+            abort(401);
+        }
+        if ($user->isSuperAdmin() || $user->isSupportIt()) {
+            return;
+        }
         $companyId = $this->resolveActiveCompanyId();
         if ($companyId && (string) $req->company_id !== (string) $companyId) {
-            abort(403, 'Acces non autorise');
+            abort(403, 'Accès non autorisé');
         }
     }
 }

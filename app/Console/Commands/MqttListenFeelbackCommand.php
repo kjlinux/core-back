@@ -14,6 +14,7 @@ use PhpMqtt\Client\MqttClient;
 class MqttListenFeelbackCommand extends Command
 {
     protected $signature = 'mqtt:listen-feelback';
+
     protected $description = 'Ecoute les capteurs Feelback et enregistre les retours satisfaction';
 
     private ?MqttClient $mqtt = null;
@@ -47,7 +48,7 @@ class MqttListenFeelbackCommand extends Command
     {
         $host = config('mqtt.host');
         $port = (int) config('mqtt.port', 8883);
-        $clientId = config('mqtt.client_id', 'core-api') . '-feelback-' . uniqid();
+        $clientId = config('mqtt.client_id', 'core-api').'-feelback-'.uniqid();
 
         $this->mqtt = new MqttClient($host, $port, $clientId, MqttClient::MQTT_3_1_1);
 
@@ -77,7 +78,7 @@ class MqttListenFeelbackCommand extends Command
         $this->mqtt->connect($connectionSettings, true);
         $this->info('Connecte au broker MQTT.');
 
-        $topic = config('mqtt.topics.feelback') . '/+/event';
+        $topic = config('mqtt.topics.feelback').'/+/event';
         $this->info("Abonnement au topic: {$topic}");
 
         $this->mqtt->subscribe($topic, function (string $topic, string $message) {
@@ -101,14 +102,9 @@ class MqttListenFeelbackCommand extends Command
         $this->info("Message recu sur {$topic}: {$message}");
 
         $data = json_decode($message, true);
-        if (!$data || empty($data['level'])) {
-            $this->warn('Message invalide: level manquant');
-            return;
-        }
+        if (! $data) {
+            $this->warn('Message invalide: JSON malformé');
 
-        $level = $data['level'];
-        if (!in_array($level, ['bon', 'neutre', 'mauvais'])) {
-            $this->warn("Niveau invalide: {$level}");
             return;
         }
 
@@ -118,8 +114,25 @@ class MqttListenFeelbackCommand extends Command
 
         // Find device
         $device = FeelbackDevice::where('serial_number', $serialNumber)->first();
-        if (!$device) {
+        if (! $device) {
             $this->warn("Capteur Feelback inconnu: {$serialNumber}");
+
+            return;
+        }
+
+        // Message de statut/heartbeat (sans vote) : on rafraichit last_ping_at
+        // pour refleter que le terminal est vivant, sans creer d'entree feelback.
+        if (empty($data['level'])) {
+            $device->update(['is_online' => true, 'last_ping_at' => now()]);
+            $this->info("Heartbeat Feelback {$serialNumber}");
+
+            return;
+        }
+
+        $level = $data['level'];
+        if (! in_array($level, ['bon', 'neutre', 'mauvais'])) {
+            $this->warn("Niveau invalide: {$level}");
+
             return;
         }
 
@@ -151,7 +164,7 @@ class MqttListenFeelbackCommand extends Command
                 ->where('created_at', '>=', now()->subHour())
                 ->first();
 
-            if (!$existingAlert) {
+            if (! $existingAlert) {
                 FeelbackAlert::create([
                     'company_id' => $device->company_id,
                     'device_id' => $device->id,

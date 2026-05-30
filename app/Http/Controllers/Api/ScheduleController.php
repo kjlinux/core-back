@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\Schedule;
-use App\Http\Resources\ScheduleResource;
 use App\Http\Requests\Schedule\StoreScheduleRequest;
 use App\Http\Requests\Schedule\UpdateScheduleRequest;
+use App\Http\Resources\ScheduleResource;
+use App\Models\Schedule;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -20,7 +20,16 @@ class ScheduleController extends BaseApiController
 
         $this->scopeByCompany($query);
 
-        $perPage = $request->input('per_page', 15);
+        $query->when($request->input('search'), function ($q, $search) {
+            $q->where(function ($qq) use ($search) {
+                $qq->where('name', 'LIKE', "%{$search}%")
+                    ->orWhereHas('company', function ($cq) use ($search) {
+                        $cq->where('name', 'LIKE', "%{$search}%");
+                    });
+            });
+        });
+
+        $perPage = (int) $request->input('per_page', 15);
         $schedules = $query->paginate($perPage);
 
         return $this->paginatedResponse(ScheduleResource::collection($schedules));
@@ -37,7 +46,7 @@ class ScheduleController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $schedule->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
@@ -52,7 +61,7 @@ class ScheduleController extends BaseApiController
         $data = $this->enforceCompanyId($request->validated());
         $schedule = Schedule::create($data);
 
-        return $this->resourceResponse(new ScheduleResource($schedule), 'Horaire cree avec succes', 201);
+        return $this->resourceResponse(new ScheduleResource($schedule), 'Horaire créé avec succès', 201);
     }
 
     /**
@@ -66,13 +75,13 @@ class ScheduleController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $schedule->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
         $schedule->update($request->validated());
 
-        return $this->resourceResponse(new ScheduleResource($schedule), 'Horaire mis a jour avec succes');
+        return $this->resourceResponse(new ScheduleResource($schedule), 'Horaire mis à jour avec succès');
     }
 
     /**
@@ -86,7 +95,7 @@ class ScheduleController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $schedule->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 

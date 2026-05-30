@@ -15,16 +15,18 @@ class MqttController extends BaseApiController
     {
         $data = $request->validated();
 
+        $topic = $data['topic'] ?? config('mqtt.test_topic', 'core/test');
+
         try {
-            $mqtt->publish($data['topic'], json_encode([
+            $mqtt->publish($topic, json_encode([
                 'type' => 'test',
                 'message' => 'Test de connexion MQTT',
                 'timestamp' => now()->toISOString(),
             ]));
 
-            return $this->successResponse(null, 'Connexion MQTT reussie');
+            return $this->successResponse(null, 'Connexion MQTT réussie');
         } catch (\Exception $e) {
-            return $this->errorResponse('Echec de connexion MQTT: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Echec de connexion MQTT: '.$e->getMessage(), 500);
         }
     }
 
@@ -32,7 +34,7 @@ class MqttController extends BaseApiController
     {
         $data = $request->validated();
 
-        $deviceId   = $data['device_id'];
+        $deviceId = $data['device_id'];
         $deviceType = $data['device_type'];
 
         if ($deviceType === 'biometric') {
@@ -44,7 +46,7 @@ class MqttController extends BaseApiController
         $commandCode = config("mqtt.command_codes.{$deviceType}.{$data['command']}", $data['command']);
 
         // Reconstruire le topic /response depuis serial_number si mqtt_topic absent
-        if (!empty($device->mqtt_topic)) {
+        if (! empty($device->mqtt_topic)) {
             $responseTopic = $mqtt->getResponseTopic($device->mqtt_topic);
         } else {
             $prefix = config("mqtt.topics.{$deviceType}");
@@ -56,11 +58,11 @@ class MqttController extends BaseApiController
             $mqtt->publish($responseTopic, $commandCode);
 
             return $this->successResponse([
-                'topic'   => $responseTopic,
+                'topic' => $responseTopic,
                 'command' => $commandCode,
-            ], 'Commande envoyee avec succes');
+            ], 'Commande envoyée avec succès');
         } catch (\Exception $e) {
-            return $this->errorResponse('Echec d\'envoi de la commande: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Echec d\'envoi de la commande: '.$e->getMessage(), 500);
         }
     }
 }

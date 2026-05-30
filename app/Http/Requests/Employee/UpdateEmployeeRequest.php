@@ -21,12 +21,23 @@ class UpdateEmployeeRequest extends FormRequest
             'schedule_id' => ['sometimes', 'nullable', 'exists:schedules,id'],
             'first_name' => ['sometimes', 'string'],
             'last_name' => ['sometimes', 'string'],
-            'email' => ['sometimes', 'email'],
+            'email' => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($this->route('id'), 'employee_id')],
             'phone' => ['sometimes', 'string'],
             'position' => ['sometimes', 'string'],
-            'employee_number' => ['sometimes', 'string', Rule::unique('employees')->ignore($this->route('employee'))],
+            'employee_number' => ['sometimes', 'string', Rule::unique('employees')->ignore($this->route('id'))],
             'hire_date' => ['sometimes', 'date'],
             'avatar' => ['sometimes', 'nullable', 'string'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'email.unique' => 'Cette adresse email est déjà utilisée par un autre compte.',
+            'employee_number.unique' => 'Ce matricule est déjà attribué à un autre employé.',
         ];
     }
 }

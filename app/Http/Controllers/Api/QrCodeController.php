@@ -19,8 +19,17 @@ class QrCodeController extends BaseApiController
 
         $this->scopeByCompany($query);
 
-        $query->when($request->input('site_id'), fn($q, $v) => $q->where('site_id', $v));
-        $query->when($request->has('is_active'), fn($q) => $q->where('is_active', $request->boolean('is_active')));
+        $query->when($request->input('site_id'), fn ($q, $v) => $q->where('site_id', $v));
+        $query->when($request->has('is_active'), fn ($q) => $q->where('is_active', $request->boolean('is_active')));
+
+        $query->when($request->input('search'), function ($q, $search) {
+            $q->where(function ($qq) use ($search) {
+                $qq->where('label', 'LIKE', "%{$search}%")
+                    ->orWhereHas('site', function ($sq) use ($search) {
+                        $sq->where('name', 'LIKE', "%{$search}%");
+                    });
+            });
+        });
 
         $qrCodes = $query->orderBy('generated_at', 'desc')->paginate($request->input('per_page', 15));
 
@@ -45,8 +54,8 @@ class QrCodeController extends BaseApiController
         $user = auth()->user();
 
         $request->validate([
-            'site_id'    => 'required|uuid|exists:sites,id',
-            'label'      => 'nullable|string|max:100',
+            'site_id' => 'required|uuid|exists:sites,id',
+            'label' => 'nullable|string|max:100',
             'company_id' => $user->isSuperAdmin() ? 'required|uuid|exists:companies,id' : 'nullable',
         ]);
 
@@ -70,7 +79,7 @@ class QrCodeController extends BaseApiController
 
         $qrCode->load('site');
 
-        return $this->resourceResponse(new \App\Http\Resources\QrCodeResource($qrCode), 'QR Code de site genere avec succes', 201);
+        return $this->resourceResponse(new \App\Http\Resources\QrCodeResource($qrCode), 'QR Code de site généré avec succès', 201);
     }
 
     public function revoke(string $id): JsonResponse
@@ -98,12 +107,12 @@ class QrCodeController extends BaseApiController
 
         $totalEmployees = \App\Models\Employee::when(
             $activeCompanyId,
-            fn($q) => $q->where('company_id', $activeCompanyId)
+            fn ($q) => $q->where('company_id', $activeCompanyId)
         )->where('is_active', true)->count();
 
         $enrolledDevices = \App\Models\Employee::when(
             $activeCompanyId,
-            fn($q) => $q->where('company_id', $activeCompanyId)
+            fn ($q) => $q->where('company_id', $activeCompanyId)
         )->whereNotNull('device_fingerprint')->count();
 
         $scansToday = (clone $attendanceQuery)->whereDate('date', today())->count();

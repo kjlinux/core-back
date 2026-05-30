@@ -11,7 +11,7 @@
 <div class="info-box">
   <table>
     <tr>
-      <td>Prenom</td>
+      <td>Prénom</td>
       <td>{{ $user->first_name }}</td>
     </tr>
     <tr>
@@ -23,7 +23,7 @@
       <td>{{ $user->email }}</td>
     </tr>
     <tr>
-      <td>Role</td>
+      <td>Rôle</td>
       <td>
         @if($user->role === 'super_admin')
           <span class="badge badge-super">Super Administrateur</span>

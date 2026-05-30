@@ -56,6 +56,11 @@ class Employee extends Model
         return $this->belongsTo(Schedule::class);
     }
 
+    public function user(): HasOne
+    {
+        return $this->hasOne(User::class);
+    }
+
     public function rfidCard(): HasOne
     {
         return $this->hasOne(RfidCard::class);

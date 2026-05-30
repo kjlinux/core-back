@@ -17,15 +17,29 @@ class FeelbackDeviceController extends BaseApiController
 
         $this->scopeByCompany($query);
 
-        if ($request->filled('site_id')) {
-            $query->where('site_id', $request->site_id);
-        }
+        $query->when($request->filled('company_id'), function ($q) use ($request) {
+            $q->where('company_id', $request->input('company_id'));
+        });
 
-        if ($request->has('is_online')) {
-            $query->where('is_online', filter_var($request->is_online, FILTER_VALIDATE_BOOLEAN));
-        }
+        $query->when($request->filled('site_id'), function ($q) use ($request) {
+            $q->where('site_id', $request->input('site_id'));
+        });
 
-        $devices = $query->paginate($request->input('per_page', 15));
+        $query->when($request->has('is_online'), function ($q) use ($request) {
+            $q->where('is_online', filter_var($request->input('is_online'), FILTER_VALIDATE_BOOLEAN));
+        });
+
+        $query->when($request->input('search'), function ($q, $search) {
+            $q->where(function ($qq) use ($search) {
+                $qq->where('serial_number', 'LIKE', "%{$search}%")
+                    ->orWhere('name', 'LIKE', "%{$search}%")
+                    ->orWhereHas('site', function ($siteQuery) use ($search) {
+                        $siteQuery->where('name', 'LIKE', "%{$search}%");
+                    });
+            });
+        });
+
+        $devices = $query->paginate((int) $request->input('per_page', 15));
 
         return $this->paginatedResponse(FeelbackDeviceResource::collection($devices));
     }
@@ -38,7 +52,7 @@ class FeelbackDeviceController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $device->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
@@ -48,7 +62,7 @@ class FeelbackDeviceController extends BaseApiController
     public function store(StoreFeelbackDeviceRequest $request): JsonResponse
     {
         $data = $this->enforceCompanyId($request->validated());
-        $data['mqtt_topic'] = 'core/feelback/sensor/' . $data['serial_number'] . '/event';
+        $data['mqtt_topic'] = 'core/feelback/sensor/'.$data['serial_number'].'/event';
 
         $device = FeelbackDevice::create($data);
 
@@ -63,7 +77,7 @@ class FeelbackDeviceController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $device->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
@@ -80,7 +94,7 @@ class FeelbackDeviceController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $device->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 

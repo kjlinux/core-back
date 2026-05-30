@@ -20,17 +20,25 @@ class BiometricDeviceController extends BaseApiController
 
         $this->scopeByCompany($query);
 
-        if ($request->filled('site_id')) {
-            $query->where('site_id', $request->site_id);
-        }
+        $query->when($request->input('search'), function ($q, $search) {
+            $q->where(function ($qq) use ($search) {
+                $qq->where('name', 'LIKE', "%{$search}%")
+                    ->orWhere('serial_number', 'LIKE', "%{$search}%")
+                    ->orWhere('firmware_version', 'LIKE', "%{$search}%");
+            });
+        });
 
-        if ($request->has('is_online')) {
-            $query->where('is_online', filter_var($request->is_online, FILTER_VALIDATE_BOOLEAN));
-        }
+        $query->when($request->filled('site_id'), function ($q) use ($request) {
+            $q->where('site_id', $request->site_id);
+        });
 
-        $devices = $query->paginate($request->input('per_page', 15));
+        $query->when($request->has('is_online'), function ($q) use ($request) {
+            $q->where('is_online', filter_var($request->is_online, FILTER_VALIDATE_BOOLEAN));
+        });
 
-        return $this->paginatedResponse(BiometricDeviceResource::collection($devices));
+        $perPage = (int) $request->input('per_page', 15);
+
+        return $this->paginatedResponse(BiometricDeviceResource::collection($query->paginate($perPage)));
     }
 
     public function show(string $id): JsonResponse
@@ -43,7 +51,7 @@ class BiometricDeviceController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $device->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
@@ -53,7 +61,7 @@ class BiometricDeviceController extends BaseApiController
     public function store(StoreDeviceRequest $request): JsonResponse
     {
         $data = $this->enforceCompanyId($request->validated());
-        $data['mqtt_topic'] = 'core/biometric/sensor/' . $data['serial_number'] . '/event';
+        $data['mqtt_topic'] = 'core/biometric/sensor/'.$data['serial_number'].'/event';
 
         $device = BiometricDevice::create($data);
 
@@ -62,10 +70,10 @@ class BiometricDeviceController extends BaseApiController
             'user_name' => $request->user()->name,
             'action' => 'device_created',
             'target' => $device->serial_number,
-            'details' => 'Appareil biometrique cree: ' . $device->name,
+            'details' => 'Appareil biométrique créé : '.$device->name,
         ]);
 
-        TechnicienActivityLog::record('create', 'biometric_device', (string) $device->id, $device->name . ' (' . $device->serial_number . ')');
+        TechnicienActivityLog::record('create', 'biometric_device', (string) $device->id, $device->name.' ('.$device->serial_number.')');
 
         return $this->resourceResponse(new BiometricDeviceResource($device), '', 201);
     }
@@ -78,7 +86,7 @@ class BiometricDeviceController extends BaseApiController
         if (! $authUser->isSuperAdmin() && ! $authUser->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $device->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
@@ -87,10 +95,10 @@ class BiometricDeviceController extends BaseApiController
             'user_name' => $request->user()->name,
             'action' => 'device_deleted',
             'target' => $device->serial_number,
-            'details' => 'Appareil biometrique supprime: ' . $device->name,
+            'details' => 'Appareil biométrique supprimé : '.$device->name,
         ]);
 
-        TechnicienActivityLog::record('delete', 'biometric_device', (string) $device->id, $device->name . ' (' . $device->serial_number . ')');
+        TechnicienActivityLog::record('delete', 'biometric_device', (string) $device->id, $device->name.' ('.$device->serial_number.')');
 
         $device->delete();
 
@@ -114,10 +122,10 @@ class BiometricDeviceController extends BaseApiController
             'user_name' => $request->user()->name,
             'action' => $request->boolean('is_online') ? 'device_set_online' : 'device_set_offline',
             'target' => $device->serial_number,
-            'details' => 'Statut manuel: ' . $device->name . ' -> ' . ($request->boolean('is_online') ? 'en ligne' : 'hors ligne'),
+            'details' => 'Statut manuel: '.$device->name.' -> '.($request->boolean('is_online') ? 'en ligne' : 'hors ligne'),
         ]);
 
-        return $this->resourceResponse(new BiometricDeviceResource($device->fresh()), 'Statut mis a jour');
+        return $this->resourceResponse(new BiometricDeviceResource($device->fresh()), 'Statut mis à jour');
     }
 
     public function sync(Request $request, string $id): JsonResponse
@@ -130,7 +138,7 @@ class BiometricDeviceController extends BaseApiController
             'user_name' => $request->user()->name,
             'action' => 'device_sync',
             'target' => $device->serial_number,
-            'details' => 'Synchronisation lancee pour: ' . $device->name,
+            'details' => 'Synchronisation lancee pour: '.$device->name,
         ]);
 
         return $this->successResponse(

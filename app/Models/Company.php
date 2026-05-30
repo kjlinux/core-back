@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-use App\Models\SubscriptionPlan;
 use App\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Company extends Model
 {
@@ -18,6 +18,7 @@ class Company extends Model
         'email',
         'phone',
         'address',
+        'matricule_prefix',
         'is_active',
         'subscription',
         'subscription_starts_at',
@@ -26,6 +27,7 @@ class Company extends Model
         'subscription_next_expires_at',
         'warranty_starts_at',
         'warranty_ends_at',
+        'warranty_auto_renew',
         'subscription_pending_change_to',
         'is_test',
     ];
@@ -39,6 +41,7 @@ class Company extends Model
         'subscription_next_expires_at' => 'datetime',
         'warranty_starts_at' => 'datetime',
         'warranty_ends_at' => 'datetime',
+        'warranty_auto_renew' => 'boolean',
     ];
 
     public function subscriptionPayments(): HasMany
@@ -60,7 +63,22 @@ class Company extends Model
 
     public function isWarrantyActive(): bool
     {
+        // Une garantie a renouvellement automatique reste active tant qu'elle n'est pas arretee.
+        if ($this->warranty_auto_renew) {
+            return true;
+        }
+
         return $this->warranty_ends_at && $this->warranty_ends_at->isFuture();
+    }
+
+    /**
+     * Administrateur principal de l'entreprise (premier compte admin_enterprise).
+     */
+    public function admin(): HasOne
+    {
+        return $this->hasOne(User::class)
+            ->where('role', 'admin_enterprise')
+            ->oldest('created_at');
     }
 
     public function sites(): HasMany

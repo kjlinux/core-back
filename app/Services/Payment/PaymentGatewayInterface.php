@@ -16,7 +16,9 @@ interface PaymentGatewayInterface
      *   type: 'order'|'subscription_payment',
      *   customer?: array<string,mixed>,
      *   items?: array<int,array<string,mixed>>,
-     *   custom_data?: array<string,mixed>
+     *   custom_data?: array<string,mixed>,
+     *   return_url?: string,
+     *   cancel_url?: string
      * } $data
      * @return array<string,mixed>
      */

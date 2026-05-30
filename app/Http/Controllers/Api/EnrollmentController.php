@@ -32,17 +32,25 @@ class EnrollmentController extends BaseApiController
             });
         }
 
-        if ($request->filled('device_id')) {
-            $query->where('device_id', $request->device_id);
-        }
+        $query->when($request->input('search'), function ($q, $search) {
+            $q->whereHas('employee', function ($eq) use ($search) {
+                $eq->where('first_name', 'LIKE', "%{$search}%")
+                    ->orWhere('last_name', 'LIKE', "%{$search}%")
+                    ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+            });
+        });
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
+        $query->when($request->filled('device_id'), function ($q) use ($request) {
+            $q->where('device_id', $request->device_id);
+        });
 
-        $enrollments = $query->paginate($request->input('per_page', 15));
+        $query->when($request->filled('status'), function ($q) use ($request) {
+            $q->where('status', $request->status);
+        });
 
-        return $this->paginatedResponse(FingerprintEnrollmentResource::collection($enrollments));
+        $perPage = (int) $request->input('per_page', 15);
+
+        return $this->paginatedResponse(FingerprintEnrollmentResource::collection($query->paginate($perPage)));
     }
 
     public function show(string $id): JsonResponse
@@ -72,7 +80,7 @@ class EnrollmentController extends BaseApiController
             'user_name' => $request->user()->name,
             'action' => 'enrollment_created',
             'target' => $employee ? $employee->full_name : $enrollment->employee_id,
-            'details' => 'Enrolement biometrique cree pour employe: '.($employee ? $employee->full_name : $enrollment->employee_id),
+            'details' => 'Enrôlement biométrique créé pour employé : '.($employee ? $employee->full_name : $enrollment->employee_id),
         ]);
 
         TechnicienActivityLog::record('enroll', 'biometric_enrollment', (string) $enrollment->id, $employee ? $employee->first_name.' '.$employee->last_name : null);
@@ -91,7 +99,7 @@ class EnrollmentController extends BaseApiController
         $employee = Employee::findOrFail($request->employee_id);
 
         if (! $device->mqtt_topic) {
-            return $this->errorResponse('Le terminal n\'a pas de topic MQTT configure', 422);
+            return $this->errorResponse('Le terminal n\'a pas de topic MQTT configuré', 422);
         }
 
         if (! $device->is_online) {
@@ -172,18 +180,18 @@ class EnrollmentController extends BaseApiController
                 'user_name' => $request->user()->name,
                 'action' => 'enrollment_started',
                 'target' => $employee->full_name,
-                'details' => 'Commande ENROLE envoyee au terminal '.$device->serial_number.' pour '.$employee->full_name,
+                'details' => 'Commande ENROLE envoyée au terminal '.$device->serial_number.' pour '.$employee->full_name,
             ]);
 
             return $this->resourceResponse(
                 new FingerprintEnrollmentResource($enrollment->load('employee')),
-                'Commande d\'enrolement envoyee au terminal',
+                'Commande d\'enrôlement envoyée au terminal',
                 201
             );
         } catch (\Exception $e) {
             $enrollment->update(['status' => 'failed']);
 
-            return $this->errorResponse('Echec d\'envoi de la commande ENROLE: '.$e->getMessage(), 500);
+            return $this->errorResponse('Échec d\'envoi de la commande ENROLE : '.$e->getMessage(), 500);
         }
     }
 
@@ -199,7 +207,7 @@ class EnrollmentController extends BaseApiController
             'user_name' => $request->user()->name,
             'action' => 'enrollment_deleted',
             'target' => $enrollment->employee_id,
-            'details' => 'Enrolement biometrique supprime pour employe ID: '.$enrollment->employee_id,
+            'details' => 'Enrôlement biométrique supprimé pour employé ID : '.$enrollment->employee_id,
         ]);
 
         $enrollment->delete();

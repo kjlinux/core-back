@@ -14,13 +14,11 @@ class SubscriptionExpiredMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public Company $company, public string $previousPlan)
-    {
-    }
+    public function __construct(public Company $company, public string $previousPlan) {}
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Votre abonnement TangaFlow a expire');
+        return new Envelope(subject: 'Votre abonnement TangaFlow a expiré');
     }
 
     public function content(): Content

@@ -7,6 +7,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Changement de type + contrainte CHECK specifiques a PostgreSQL ; ignores sur sqlite (tests).
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::statement('ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check');
         DB::statement('ALTER TABLE orders ALTER COLUMN payment_method TYPE varchar(32)');
         DB::statement("UPDATE orders SET payment_method = 'intouch_mobile_money' WHERE payment_method = 'mobile_money'");
@@ -16,6 +21,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::statement('ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check');
         DB::statement("UPDATE orders SET payment_method = 'mobile_money' WHERE payment_method = 'intouch_mobile_money'");
         DB::statement("UPDATE orders SET payment_method = 'bank_card' WHERE payment_method = 'intouch_card'");

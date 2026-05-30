@@ -26,7 +26,14 @@ class RfidDeviceController extends BaseApiController
             $query->where('is_online', filter_var($request->is_online, FILTER_VALIDATE_BOOLEAN));
         }
 
-        $devices = $query->paginate($request->input('per_page', 15));
+        $query->when($request->input('search'), function ($q, $search) {
+            $q->where(function ($qq) use ($search) {
+                $qq->where('name', 'LIKE', "%{$search}%")
+                    ->orWhere('serial_number', 'LIKE', "%{$search}%");
+            });
+        });
+
+        $devices = $query->paginate((int) $request->input('per_page', 15));
 
         return $this->paginatedResponse(RfidDeviceResource::collection($devices));
     }
@@ -39,7 +46,7 @@ class RfidDeviceController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $device->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
@@ -49,11 +56,11 @@ class RfidDeviceController extends BaseApiController
     public function store(StoreRfidDeviceRequest $request): JsonResponse
     {
         $data = $this->enforceCompanyId($request->validated());
-        $data['mqtt_topic'] = 'core/rfid/sensor/' . $data['serial_number'] . '/event';
+        $data['mqtt_topic'] = 'core/rfid/sensor/'.$data['serial_number'].'/event';
 
         $device = RfidDevice::create($data);
 
-        TechnicienActivityLog::record('create', 'rfid_device', (string) $device->id, $device->name . ' (' . $device->serial_number . ')');
+        TechnicienActivityLog::record('create', 'rfid_device', (string) $device->id, $device->name.' ('.$device->serial_number.')');
 
         return $this->resourceResponse(new RfidDeviceResource($device), '', 201);
     }
@@ -66,13 +73,13 @@ class RfidDeviceController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $device->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
         $device->update($request->validated());
 
-        TechnicienActivityLog::record('update', 'rfid_device', (string) $device->id, $device->name . ' (' . $device->serial_number . ')');
+        TechnicienActivityLog::record('update', 'rfid_device', (string) $device->id, $device->name.' ('.$device->serial_number.')');
 
         return $this->resourceResponse(new RfidDeviceResource($device));
     }
@@ -85,11 +92,11 @@ class RfidDeviceController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $device->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
-        TechnicienActivityLog::record('delete', 'rfid_device', (string) $device->id, $device->name . ' (' . $device->serial_number . ')');
+        TechnicienActivityLog::record('delete', 'rfid_device', (string) $device->id, $device->name.' ('.$device->serial_number.')');
         $device->delete();
 
         return $this->noContentResponse();

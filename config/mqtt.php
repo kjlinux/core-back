@@ -16,6 +16,7 @@ return [
         'biometric' => 'core/biometric/sensor',
         'feelback' => 'core/feelback/sensor',
     ],
+    'test_topic' => env('MQTT_TEST_TOPIC', 'core/test'),
     'response_codes' => [
         'accepted' => '0x001020',
         'refused' => '0x003020',

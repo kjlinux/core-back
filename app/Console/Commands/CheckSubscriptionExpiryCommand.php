@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Mail;
 class CheckSubscriptionExpiryCommand extends Command
 {
     protected $signature = 'subscriptions:check-expiry';
+
     protected $description = 'Expire les abonnements arrives a echeance (bascule en Freemium) et envoie un mail.';
 
     public function handle(SubscriptionService $service): int
@@ -32,6 +33,21 @@ class CheckSubscriptionExpiryCommand extends Command
         }
 
         $this->info(sprintf('Total : %d compagnie(s) expiree(s).', $expired->count()));
+
+        // Renouvellement automatique des garanties materielles (12 mois) non arretees.
+        $warranties = Company::where('warranty_auto_renew', true)
+            ->whereNotNull('warranty_ends_at')
+            ->where('warranty_ends_at', '<', now())
+            ->get();
+
+        foreach ($warranties as $company) {
+            $company->warranty_ends_at = now()->addMonths(12);
+            $company->save();
+            $this->info("Garantie renouvelee pour {$company->name}.");
+        }
+
+        $this->info(sprintf('Total : %d garantie(s) renouvelee(s).', $warranties->count()));
+
         return self::SUCCESS;
     }
 }

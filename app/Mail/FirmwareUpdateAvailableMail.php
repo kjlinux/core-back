@@ -19,9 +19,10 @@ class FirmwareUpdateAvailableMail extends Mailable
 
     public function envelope(): Envelope
     {
-        $kind = $this->firmware->device_kind === 'rfid' ? 'RFID' : 'Biometrique';
+        $kind = $this->firmware->device_kind === 'rfid' ? 'RFID' : 'Biométrique';
+
         return new Envelope(
-            subject: "Mise a jour firmware disponible — v{$this->firmware->version} ({$kind})",
+            subject: "Mise à jour firmware disponible — v{$this->firmware->version} ({$kind})",
         );
     }
 

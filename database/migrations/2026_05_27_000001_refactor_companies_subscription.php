@@ -9,12 +9,20 @@ return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement('ALTER TABLE companies DROP CONSTRAINT IF EXISTS companies_subscription_check');
-        DB::statement('ALTER TABLE companies ALTER COLUMN subscription DROP DEFAULT');
-        DB::statement('ALTER TABLE companies ALTER COLUMN subscription TYPE varchar(32)');
-        DB::statement("UPDATE companies SET subscription = CASE WHEN subscription IN ('premium','enterprise') THEN 'premium' ELSE 'freemium' END");
-        DB::statement("ALTER TABLE companies ALTER COLUMN subscription SET DEFAULT 'freemium'");
-        DB::statement("ALTER TABLE companies ADD CONSTRAINT companies_subscription_check CHECK (subscription IN ('freemium','garantie','premium'))");
+        // Changement de type/default + contrainte CHECK specifiques a PostgreSQL.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('ALTER TABLE companies DROP CONSTRAINT IF EXISTS companies_subscription_check');
+            DB::statement('ALTER TABLE companies ALTER COLUMN subscription DROP DEFAULT');
+            DB::statement('ALTER TABLE companies ALTER COLUMN subscription TYPE varchar(32)');
+            DB::statement("UPDATE companies SET subscription = CASE WHEN subscription IN ('premium','enterprise') THEN 'premium' ELSE 'freemium' END");
+            DB::statement("ALTER TABLE companies ALTER COLUMN subscription SET DEFAULT 'freemium'");
+            DB::statement("ALTER TABLE companies ADD CONSTRAINT companies_subscription_check CHECK (subscription IN ('freemium','garantie','premium'))");
+        } else {
+            // sqlite (tests) : enum -> string libre avec le nouveau defaut.
+            Schema::table('companies', function (Blueprint $table) {
+                $table->string('subscription', 32)->default('freemium')->change();
+            });
+        }
 
         Schema::table('companies', function (Blueprint $table) {
             $table->timestamp('subscription_starts_at')->nullable();
@@ -46,10 +54,16 @@ return new class extends Migration
             ]);
         });
 
-        DB::statement('ALTER TABLE companies DROP CONSTRAINT IF EXISTS companies_subscription_check');
-        DB::statement('ALTER TABLE companies ALTER COLUMN subscription DROP DEFAULT');
-        DB::statement("UPDATE companies SET subscription = CASE WHEN subscription = 'freemium' THEN 'basic' WHEN subscription = 'garantie' THEN 'premium' ELSE subscription END");
-        DB::statement("ALTER TABLE companies ALTER COLUMN subscription SET DEFAULT 'basic'");
-        DB::statement("ALTER TABLE companies ADD CONSTRAINT companies_subscription_check CHECK (subscription IN ('basic','premium','enterprise'))");
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('ALTER TABLE companies DROP CONSTRAINT IF EXISTS companies_subscription_check');
+            DB::statement('ALTER TABLE companies ALTER COLUMN subscription DROP DEFAULT');
+            DB::statement("UPDATE companies SET subscription = CASE WHEN subscription = 'freemium' THEN 'basic' WHEN subscription = 'garantie' THEN 'premium' ELSE subscription END");
+            DB::statement("ALTER TABLE companies ALTER COLUMN subscription SET DEFAULT 'basic'");
+            DB::statement("ALTER TABLE companies ADD CONSTRAINT companies_subscription_check CHECK (subscription IN ('basic','premium','enterprise'))");
+        } else {
+            Schema::table('companies', function (Blueprint $table) {
+                $table->string('subscription', 32)->default('basic')->change();
+            });
+        }
     }
 };

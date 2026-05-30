@@ -32,7 +32,7 @@ class RequirePlanMiddleware
 
         $company = $user->company;
         if (! $company) {
-            return response()->json(['success' => false, 'message' => 'Aucune compagnie associee'], 403);
+            return response()->json(['success' => false, 'message' => 'Aucune compagnie associée'], 403);
         }
 
         $currentPlan = $company->subscription;

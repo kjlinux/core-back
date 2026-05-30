@@ -217,7 +217,7 @@ class MqttListenBiometricCommand extends Command
             $exitTime = now();
             $earlyMinutes = 0;
 
-            $schedule = $resolver->resolveForEmployee($employee->company_id, $employee->department_id, $exitTime);
+            $schedule = $resolver->resolveForEmployee($employee->company_id, $employee->department_id, $exitTime, $employee->schedule_id);
 
             if ($schedule) {
                 $earlyMinutes = $resolver->calculateEarlyDepartureMinutes($schedule, $exitTime);
@@ -235,7 +235,7 @@ class MqttListenBiometricCommand extends Command
             $lateMinutes = 0;
             $status = 'present';
 
-            $schedule = $resolver->resolveForEmployee($employee->company_id, $employee->department_id, $entryTime);
+            $schedule = $resolver->resolveForEmployee($employee->company_id, $employee->department_id, $entryTime, $employee->schedule_id);
 
             if ($schedule) {
                 $lateMinutes = $resolver->calculateLateMinutes($schedule, $entryTime);
@@ -315,7 +315,7 @@ class MqttListenBiometricCommand extends Command
                 'user_name' => $employee ? $employee->full_name : $enrollment->employee_id,
                 'action' => 'enrollment_completed',
                 'target' => $employee ? $employee->full_name : $enrollment->employee_id,
-                'details' => 'Enrolement biometrique reussi - template_hash: '.substr($templateHash, 0, 12).'...',
+                'details' => 'Enrôlement biométrique réussi - template_hash: '.substr($templateHash, 0, 12).'...',
             ]);
 
             $this->mqtt->publish($responseTopic, config('mqtt.response_codes.accepted'), MqttClient::QOS_AT_LEAST_ONCE);
@@ -330,7 +330,7 @@ class MqttListenBiometricCommand extends Command
                 'user_name' => $failedEmployee ? $failedEmployee->full_name : (string) $enrollment->employee_id,
                 'action' => 'enrollment_failed',
                 'target' => $failedEmployee ? $failedEmployee->full_name : (string) $enrollment->employee_id,
-                'details' => 'Enrolement biometrique echoue - '.($data['error'] ?? 'Erreur inconnue'),
+                'details' => 'Enrôlement biométrique échoué - '.($data['error'] ?? 'Erreur inconnue'),
             ]);
 
             $this->mqtt->publish($responseTopic, config('mqtt.response_codes.rejected'), MqttClient::QOS_AT_LEAST_ONCE);
@@ -409,10 +409,10 @@ class MqttListenBiometricCommand extends Command
             ->where('started_at', '<', now()->subSeconds(30))
             ->where(function ($q) {
                 $q->whereIn('status', ['pending', 'in_progress'])
-                  ->orWhere(function ($q2) {
-                      $q2->where('status', 'failed')
-                         ->where('error_message', 'like', 'Timeout%');
-                  });
+                    ->orWhere(function ($q2) {
+                        $q2->where('status', 'failed')
+                            ->where('error_message', 'like', 'Timeout%');
+                    });
             })
             ->orderByDesc('started_at')
             ->get()
@@ -426,6 +426,7 @@ class MqttListenBiometricCommand extends Command
 
             if ($currentVersion && $fw->version === $currentVersion) {
                 $log->update(['status' => 'success', 'completed_at' => now()]);
+
                 continue;
             }
 

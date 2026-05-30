@@ -11,7 +11,9 @@ class SubscriptionPayment extends Model
     use HasUuid;
 
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_PAID = 'paid';
+
     public const STATUS_FAILED = 'failed';
 
     protected $fillable = [
@@ -24,8 +26,8 @@ class SubscriptionPayment extends Model
         'period_end',
         'payment_method',
         'payment_status',
-        'intouch_token',
-        'intouch_response',
+        'gateway_token',
+        'gateway_response',
         'triggered_by_user_id',
         'triggered_by_superadmin',
     ];
@@ -36,7 +38,7 @@ class SubscriptionPayment extends Model
         'amount_xof' => 'integer',
         'period_start' => 'datetime',
         'period_end' => 'datetime',
-        'intouch_response' => 'array',
+        'gateway_response' => 'array',
     ];
 
     public function company(): BelongsTo

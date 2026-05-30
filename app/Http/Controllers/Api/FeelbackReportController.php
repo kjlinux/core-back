@@ -21,10 +21,10 @@ class FeelbackReportController extends BaseApiController
 
         $type = $request->input('type', 'global');
         $headers = match ($type) {
-            'site'       => ['Site ID', 'Site', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
-            'department' => ['Dept ID', 'Departement', 'Site', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
-            'period'     => ['Periode', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
-            default      => ['Total reponses', 'Bon (%)', 'Neutre (%)', 'Mauvais (%)'],
+            'site' => ['Site ID', 'Site', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
+            'department' => ['Dept ID', 'Département', 'Site', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
+            'period' => ['Période', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
+            default => ['Total réponses', 'Bon (%)', 'Neutre (%)', 'Mauvais (%)'],
         };
 
         $rows = match ($type) {
@@ -55,24 +55,24 @@ class FeelbackReportController extends BaseApiController
                 array_map(fn ($r) => [$r['site'], $r['totalResponses'], $r['bon'], $r['neutre'], $r['mauvais'], $r['satisfactionRate']], $payload['bySite']),
             ],
             'department' => [
-                ['Departement', 'Site', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
+                ['Département', 'Site', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
                 array_map(fn ($r) => [$r['department'], $r['site'], $r['totalResponses'], $r['bon'], $r['neutre'], $r['mauvais'], $r['satisfactionRate']], $payload['byDepartment']),
             ],
             'period' => [
-                ['Periode', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
+                ['Période', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
                 array_map(fn ($r) => [$r['period'], $r['totalResponses'], $r['bon'], $r['neutre'], $r['mauvais'], $r['satisfactionRate']], $payload['byPeriod']),
             ],
             default => [
-                ['Total reponses', 'Bon (%)', 'Neutre (%)', 'Mauvais (%)'],
+                ['Total réponses', 'Bon (%)', 'Neutre (%)', 'Mauvais (%)'],
                 [[$payload['totalResponses'], $payload['bonRate'], $payload['neutreRate'], $payload['mauvaisRate']]],
             ],
         };
 
         $summary = [
-            ['label' => 'Total reponses', 'value' => $payload['totalResponses']],
-            ['label' => 'Bon', 'value' => $payload['bonRate'] . ' %'],
-            ['label' => 'Neutre', 'value' => $payload['neutreRate'] . ' %'],
-            ['label' => 'Mauvais', 'value' => $payload['mauvaisRate'] . ' %'],
+            ['label' => 'Total réponses', 'value' => $payload['totalResponses']],
+            ['label' => 'Bon', 'value' => $payload['bonRate'].' %'],
+            ['label' => 'Neutre', 'value' => $payload['neutreRate'].' %'],
+            ['label' => 'Mauvais', 'value' => $payload['mauvaisRate'].' %'],
         ];
 
         $subtitle = sprintf('Vue: %s', $type);
@@ -89,21 +89,21 @@ class FeelbackReportController extends BaseApiController
     private function buildPayload(Request $request): array
     {
         $request->validate([
-            'start_date'         => 'nullable|date',
-            'end_date'           => 'nullable|date|after_or_equal:start_date',
-            'company_id'         => 'nullable|string|exists:companies,id',
-            'site_id'            => 'nullable|string|exists:sites,id',
-            'department_id'      => 'nullable|string|exists:departments,id',
-            'type'               => 'nullable|string|in:global,site,department,period',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'company_id' => 'nullable|string|exists:companies,id',
+            'site_id' => 'nullable|string|exists:sites,id',
+            'department_id' => 'nullable|string|exists:departments,id',
+            'type' => 'nullable|string|in:global,site,department,period',
             'period_granularity' => 'nullable|string|in:day,week,month',
         ]);
 
-        $startDate    = $request->input('start_date');
-        $endDate      = $request->input('end_date');
-        $siteId       = $request->input('site_id');
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+        $siteId = $request->input('site_id');
         $departmentId = $request->input('department_id');
-        $granularity  = $request->input('period_granularity', 'month');
-        $user         = $request->user();
+        $granularity = $request->input('period_granularity', 'month');
+        $user = $request->user();
 
         // For super_admin: use explicit company_id param if provided, otherwise no filter (sees all).
         // For others: always scoped to their active company.
@@ -136,6 +136,7 @@ class FeelbackReportController extends BaseApiController
             if ($deptSiteIds !== null) {
                 $q->whereIn('feelback_entries.site_id', $deptSiteIds);
             }
+
             return $q;
         };
 
@@ -150,12 +151,12 @@ class FeelbackReportController extends BaseApiController
             ->first();
 
         $totalResponses = (int) ($globalRow->total ?? 0);
-        $bonCount       = (int) ($globalRow->bon ?? 0);
-        $neutreCount    = (int) ($globalRow->neutre ?? 0);
-        $mauvaisCount   = (int) ($globalRow->mauvais ?? 0);
+        $bonCount = (int) ($globalRow->bon ?? 0);
+        $neutreCount = (int) ($globalRow->neutre ?? 0);
+        $mauvaisCount = (int) ($globalRow->mauvais ?? 0);
 
-        $bonRate     = $totalResponses > 0 ? round($bonCount / $totalResponses * 100, 1) : 0;
-        $neutreRate  = $totalResponses > 0 ? round($neutreCount / $totalResponses * 100, 1) : 0;
+        $bonRate = $totalResponses > 0 ? round($bonCount / $totalResponses * 100, 1) : 0;
+        $neutreRate = $totalResponses > 0 ? round($neutreCount / $totalResponses * 100, 1) : 0;
         $mauvaisRate = $totalResponses > 0 ? round($mauvaisCount / $totalResponses * 100, 1) : 0;
 
         // ── By site (1 query + 1 lookup) ─────────────────────────────────────
@@ -173,12 +174,12 @@ class FeelbackReportController extends BaseApiController
         $sitesById = Site::whereIn('id', $siteRows->pluck('site_id'))->pluck('name', 'id');
 
         $bySite = $siteRows->map(fn ($r) => [
-            'siteId'           => (string) $r->site_id,
-            'site'             => $sitesById[$r->site_id] ?? '-',
-            'totalResponses'   => (int) $r->total,
-            'bon'              => (int) $r->bon,
-            'neutre'           => (int) $r->neutre,
-            'mauvais'          => (int) $r->mauvais,
+            'siteId' => (string) $r->site_id,
+            'site' => $sitesById[$r->site_id] ?? '-',
+            'totalResponses' => (int) $r->total,
+            'bon' => (int) $r->bon,
+            'neutre' => (int) $r->neutre,
+            'mauvais' => (int) $r->mauvais,
             'satisfactionRate' => $r->total > 0 ? round($r->bon / $r->total * 100, 1) : 0,
         ])->values()->toArray();
 
@@ -188,7 +189,7 @@ class FeelbackReportController extends BaseApiController
         // (ce qui fausse les sommes et double-compte), on répartit proportionnellement
         // les compteurs du site entre ses départements (parts égales).
         $siteStatsBySiteId = $siteRows->keyBy('site_id');
-        $siteNamesById     = $sitesById;
+        $siteNamesById = $sitesById;
 
         $departments = Department::whereIn('site_id', $siteRows->pluck('site_id'))
             ->get(['id', 'name', 'site_id']);
@@ -198,18 +199,19 @@ class FeelbackReportController extends BaseApiController
         $byDepartment = $departments->map(function ($dept) use ($siteStatsBySiteId, $siteNamesById, $deptCountBySite) {
             $stats = $siteStatsBySiteId[$dept->site_id] ?? null;
             $share = max(1, (int) ($deptCountBySite[$dept->site_id] ?? 1));
-            $total   = $stats ? (int) round(((int) $stats->total)   / $share) : 0;
-            $bon     = $stats ? (int) round(((int) $stats->bon)     / $share) : 0;
-            $neutre  = $stats ? (int) round(((int) $stats->neutre)  / $share) : 0;
+            $total = $stats ? (int) round(((int) $stats->total) / $share) : 0;
+            $bon = $stats ? (int) round(((int) $stats->bon) / $share) : 0;
+            $neutre = $stats ? (int) round(((int) $stats->neutre) / $share) : 0;
             $mauvais = $stats ? (int) round(((int) $stats->mauvais) / $share) : 0;
+
             return [
-                'departmentId'     => (string) $dept->id,
-                'department'       => $dept->name,
-                'site'             => $siteNamesById[$dept->site_id] ?? '-',
-                'totalResponses'   => $total,
-                'bon'              => $bon,
-                'neutre'           => $neutre,
-                'mauvais'          => $mauvais,
+                'departmentId' => (string) $dept->id,
+                'department' => $dept->name,
+                'site' => $siteNamesById[$dept->site_id] ?? '-',
+                'totalResponses' => $total,
+                'bon' => $bon,
+                'neutre' => $neutre,
+                'mauvais' => $mauvais,
                 'satisfactionRate' => $total > 0 ? round($bon / $total * 100, 1) : 0,
             ];
         })->values()->toArray();
@@ -217,9 +219,9 @@ class FeelbackReportController extends BaseApiController
         // ── By period (1 query, PostgreSQL DATE_TRUNC) ───────────────────────
         // Use explicit GROUP BY/ORDER BY expressions to avoid positional ambiguity on PostgreSQL
         [$periodSelectExpr, $periodGroupExpr] = match ($granularity) {
-            'day'  => [
-                DB::raw("DATE(feelback_entries.created_at) as period"),
-                "DATE(feelback_entries.created_at)",
+            'day' => [
+                DB::raw('DATE(feelback_entries.created_at) as period'),
+                'DATE(feelback_entries.created_at)',
             ],
             'week' => [
                 DB::raw("TO_CHAR(DATE_TRUNC('week', feelback_entries.created_at), 'YYYY-WW') as period"),
@@ -244,22 +246,22 @@ class FeelbackReportController extends BaseApiController
             ->get();
 
         $byPeriod = $periodRows->map(fn ($r) => [
-            'period'           => (string) $r->period,
-            'totalResponses'   => (int) $r->total,
-            'bon'              => (int) $r->bon,
-            'neutre'           => (int) $r->neutre,
-            'mauvais'          => (int) $r->mauvais,
+            'period' => (string) $r->period,
+            'totalResponses' => (int) $r->total,
+            'bon' => (int) $r->bon,
+            'neutre' => (int) $r->neutre,
+            'mauvais' => (int) $r->mauvais,
             'satisfactionRate' => $r->total > 0 ? round($r->bon / $r->total * 100, 1) : 0,
         ])->values()->toArray();
 
         return [
             'totalResponses' => $totalResponses,
-            'bonRate'        => $bonRate,
-            'neutreRate'     => $neutreRate,
-            'mauvaisRate'    => $mauvaisRate,
-            'bySite'         => $bySite,
-            'byDepartment'   => $byDepartment,
-            'byPeriod'       => $byPeriod,
+            'bonRate' => $bonRate,
+            'neutreRate' => $neutreRate,
+            'mauvaisRate' => $mauvaisRate,
+            'bySite' => $bySite,
+            'byDepartment' => $byDepartment,
+            'byPeriod' => $byPeriod,
         ];
     }
 }

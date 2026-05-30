@@ -2,28 +2,37 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\ExpectedDaysStrategy;
+use App\Models\AbsenceRequest;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
+use App\Models\Holiday;
+use App\Models\PayrollConfig;
+use App\Models\Schedule;
+use App\Services\AttendanceStatsService;
 use App\Support\CsvExporter;
 use App\Support\ReportPdfRenderer;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AttendanceReportController extends BaseApiController
 {
+    public function __construct(private readonly AttendanceStatsService $statsService) {}
+
     public function index(Request $request): JsonResponse
     {
         $report = $this->buildReport($request);
+
         return $this->successResponse($report);
     }
 
     public function exportCsv(Request $request): StreamedResponse
     {
         $report = $this->buildReport($request);
-        $headers = ['Matricule', 'Employe', 'Departement', 'Site', 'Presents', 'Absents', 'Retards', 'Heures sup.', 'Taux (%)'];
+        $headers = ['Matricule', 'Employé', 'Département', 'Site', 'Présents', 'Absents', 'Retards', 'Heures sup.', 'Taux (%)'];
         $rows = array_map(fn ($r) => [
             $r['employeeId'],
             $r['employee'],
@@ -49,26 +58,36 @@ class AttendanceReportController extends BaseApiController
     public function exportPdf(Request $request): Response
     {
         $report = $this->buildReport($request);
-        $headers = ['Matricule', 'Employe', 'Departement', 'Site', 'Presents', 'Absents', 'Retards', 'Heures sup.', 'Taux (%)'];
+        $headers = ['Matricule', 'Employé', 'Département', 'Site', 'Présents', 'Absents', 'Retards', 'Heures sup.', 'Taux (%)'];
         $rows = array_map(fn ($r) => [
             $r['employeeId'], $r['employee'], $r['department'], $r['site'],
             $r['present'], $r['absent'], $r['late'], $r['overtime'], $r['rate'],
         ], $report['rows']);
 
         $summary = [
-            ['label' => 'Employes', 'value' => $report['totalEmployees']],
-            ['label' => 'Presents', 'value' => $report['totalPresent']],
+            ['label' => 'Employés', 'value' => $report['totalEmployees']],
+            ['label' => 'Présents', 'value' => $report['totalPresent']],
             ['label' => 'Absents', 'value' => $report['totalAbsent']],
             ['label' => 'Retards', 'value' => $report['totalLate']],
         ];
 
         $subtitle = sprintf('Du %s au %s', $request->input('start_date'), $request->input('end_date'));
-        $pdf = ReportPdfRenderer::render('Rapport de presence', $headers, $rows, $summary, $subtitle);
+        $pdf = ReportPdfRenderer::render('Rapport de présence', $headers, $rows, $summary, $subtitle);
 
         $filename = sprintf('rapport-presence_%s_au_%s.pdf', $request->input('start_date'), $request->input('end_date'));
+
         return $pdf->download($filename);
     }
 
+    /**
+     * Construit le rapport de présence.
+     *
+     * Le calcul est piloté uniquement par [start_date, end_date] : le paramètre
+     * `type` (daily/monthly) est purement indicatif côté serveur (aucune
+     * réécriture des dates), tandis que late/absence filtre les lignes produites.
+     * Les jours ouvrés attendus, les absences (dérivées) et le taux de présence
+     * sont délégués à AttendanceStatsService.
+     */
     private function buildReport(Request $request): array
     {
         $request->validate([
@@ -78,75 +97,69 @@ class AttendanceReportController extends BaseApiController
             'company_id' => 'nullable|string|exists:companies,id',
             'site_id' => 'nullable|string|exists:sites,id',
             'department_id' => 'nullable|string|exists:departments,id',
+            'source' => 'nullable|string|in:rfid,qrcode,biometric,manual,mobile',
         ]);
 
-        $startDate = $request->input('start_date');
-        $endDate = $request->input('end_date');
+        $start = Carbon::parse($request->input('start_date'))->startOfDay();
+        $end = Carbon::parse($request->input('end_date'))->endOfDay();
         $type = $request->input('type', 'daily');
 
-        $employeeQuery = Employee::where('is_active', true);
+        $user = $request->user();
+        $companyId = $user && $user->isSuperAdmin()
+            ? $request->input('company_id')
+            : $this->resolveActiveCompanyId();
+
+        // Itérer sur les EMPLOYÉS (et non sur les pointages groupés) : un employé
+        // sans aucun pointage doit apparaître en absence totale, pas disparaître.
+        $employeeQuery = Employee::where('is_active', true)->with(['department', 'site']);
         $this->applyEmployeeFilters($employeeQuery, $request);
-        $employeeIds = $employeeQuery->pluck('id');
+        $employees = $employeeQuery->get();
+        $employeeIds = $employees->pluck('id');
 
-        $attendanceQuery = AttendanceRecord::with(['employee.department', 'employee.site'])
+        // Tout précharger en une fois (évite les N+1 dans le service pur).
+        // `source` (optionnel) restreint le rapport à un canal de pointage donné,
+        // ex. biometric pour le rapport biométrique.
+        $recordsByEmployee = AttendanceRecord::whereIn('employee_id', $employeeIds)
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->when($request->filled('source'), fn ($query) => $query->where('source', $request->input('source')))
+            ->get()
+            ->groupBy('employee_id');
+
+        $leavesByEmployee = AbsenceRequest::where('status', 'approved')
             ->whereIn('employee_id', $employeeIds)
-            ->whereBetween('date', [$startDate, $endDate]);
+            ->where('date_start', '<=', $end->toDateString())
+            ->where('date_end', '>=', $start->toDateString())
+            ->get()
+            ->groupBy('employee_id');
 
-        $records = $attendanceQuery->get();
+        $companySchedules = $companyId
+            ? Schedule::where('company_id', $companyId)->get()
+            : Schedule::query()->get();
 
-        $rows = $records->groupBy('employee_id')->map(function ($employeeRecords) {
-            $employee = $employeeRecords->first()->employee;
-            if (!$employee) return null;
+        // Les jours fériés sont propres à une entreprise : on ne les applique que
+        // si une entreprise est ciblée (le front impose la sélection pour super_admin).
+        $companyHolidays = $companyId
+            ? Holiday::where('company_id', $companyId)->get()
+            : collect();
 
-            $totalDays = $employeeRecords->count();
-            // left_early = présent mais parti avant la fin — compté comme présent
-            $presentDays = $employeeRecords->whereIn('status', ['present', 'left_early'])->count();
-            $absentDays = $employeeRecords->where('status', 'absent')->count();
-            $lateDays = $employeeRecords->where('status', 'late')->count();
+        $config = $companyId
+            ? PayrollConfig::where('company_id', $companyId)->first()
+            : null;
 
-            // Overtime = minutes worked beyond scheduled end time
-            $overtimeMinutes = $employeeRecords->sum('overtime_minutes');
-            $overtime = $overtimeMinutes > 0 ? round($overtimeMinutes / 60, 1) : 0;
+        $strategy = ExpectedDaysStrategy::fromConfig(config('attendance.expected_days_strategy'));
 
-            // Taux de présence = (présent + retard + parti tôt) / total jours
-            // Un employé en retard est bien venu — il ne doit pas baisser son taux de présence
-            $attendedDays = $presentDays + $lateDays;
-            $rate = $totalDays > 0
-                ? round(($attendedDays / $totalDays) * 100, 1)
-                : 0.0;
-
-            return [
-                'employeeId' => (string) $employee->id,
-                'employee' => $employee->first_name . ' ' . $employee->last_name,
-                'department' => $employee->department?->name ?? '-',
-                'site' => $employee->site?->name ?? '-',
-                'present' => $presentDays,
-                'absent' => $absentDays,
-                'late' => $lateDays,
-                'overtime' => $overtime,
-                'rate' => $rate,
-            ];
-        })->filter()->values()->toArray();
-
-        // Apply type-specific filtering
-        if ($type === 'late') {
-            $rows = array_values(array_filter($rows, fn ($r) => $r['late'] > 0));
-        } elseif ($type === 'absence') {
-            $rows = array_values(array_filter($rows, fn ($r) => $r['absent'] > 0));
-        }
-
-        // Calculate totals
-        $totalPresent = array_sum(array_column($rows, 'present'));
-        $totalAbsent = array_sum(array_column($rows, 'absent'));
-        $totalLate = array_sum(array_column($rows, 'late'));
-
-        return [
-            'totalEmployees' => count($rows),
-            'totalPresent' => $totalPresent,
-            'totalAbsent' => $totalAbsent,
-            'totalLate' => $totalLate,
-            'rows' => $rows,
-        ];
+        return $this->statsService->buildReport(
+            $employees,
+            $start,
+            $end,
+            $recordsByEmployee,
+            $companySchedules,
+            $companyHolidays,
+            $leavesByEmployee,
+            $strategy,
+            $config,
+            $type,
+        );
     }
 
     private function applyEmployeeFilters($query, Request $request): void

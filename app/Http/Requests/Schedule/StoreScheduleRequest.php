@@ -6,9 +6,16 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class StoreScheduleRequest extends FormRequest
 {
+    use NormalizesScheduleDays;
+
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->normalizeScheduleDays();
     }
 
     public function rules(): array

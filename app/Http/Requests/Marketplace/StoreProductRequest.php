@@ -18,10 +18,12 @@ class StoreProductRequest extends FormRequest
             'description' => ['required', 'string'],
             'category' => ['nullable', 'in:standard_card,custom_card,enterprise_pack'],
             'price' => ['required', 'integer', 'min:0'],
+            'currency' => ['nullable', 'string', 'max:10'],
             'stock_quantity' => ['required', 'integer', 'min:0'],
             'images' => ['nullable', 'array'],
             'customizable' => ['nullable', 'boolean'],
             'min_quantity' => ['nullable', 'integer', 'min:1'],
+            'is_active' => ['nullable', 'boolean'],
         ];
     }
 }

@@ -16,10 +16,15 @@ use Illuminate\Support\Facades\Log;
 class IntouchService implements PaymentGatewayInterface
 {
     protected string $baseUrl;
+
     protected ?string $loginAgent;
+
     protected ?string $passwordAgent;
+
     protected ?string $apiKey;
+
     protected ?string $partnerId;
+
     protected ?string $webhookSecret;
 
     public function __construct()
@@ -68,13 +73,13 @@ class IntouchService implements PaymentGatewayInterface
 
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Authorization' => 'Bearer '.$this->apiKey,
                 'X-Partner-Id' => (string) $this->partnerId,
                 'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
             ])
                 ->timeout(30)
-                ->post($this->baseUrl . '/transfer/v1/payment/initiate', $payload);
+                ->post($this->baseUrl.'/transfer/v1/payment/initiate', $payload);
         } catch (\Throwable $e) {
             Log::error('InTouch HTTP exception', ['error' => $e->getMessage()]);
 
@@ -84,7 +89,7 @@ class IntouchService implements PaymentGatewayInterface
         if (! $response->successful()) {
             Log::error('InTouch HTTP error', ['status' => $response->status(), 'body' => $response->body()]);
 
-            return ['success' => false, 'message' => 'Echec de creation du paiement'];
+            return ['success' => false, 'message' => 'Échec de création du paiement'];
         }
 
         $body = $response->json();
@@ -103,7 +108,7 @@ class IntouchService implements PaymentGatewayInterface
 
         return [
             'success' => false,
-            'message' => $body['message'] ?? 'Echec de creation du paiement',
+            'message' => $body['message'] ?? 'Échec de création du paiement',
             'raw' => $body,
         ];
     }
@@ -112,12 +117,12 @@ class IntouchService implements PaymentGatewayInterface
     {
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Authorization' => 'Bearer '.$this->apiKey,
                 'X-Partner-Id' => (string) $this->partnerId,
                 'Accept' => 'application/json',
             ])
                 ->timeout(15)
-                ->get($this->baseUrl . '/transfer/v1/payment/status/' . $token);
+                ->get($this->baseUrl.'/transfer/v1/payment/status/'.$token);
         } catch (\Throwable $e) {
             return ['status' => 'unknown', 'error' => $e->getMessage()];
         }

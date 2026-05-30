@@ -12,17 +12,17 @@ class RoleMiddleware
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'success' => false,
                 'message' => 'Non authentifie',
             ], 401);
         }
 
-        if (!in_array($user->role, $roles)) {
+        if (! in_array($user->role, $roles)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Acces non autorise',
+                'message' => 'Accès non autorisé',
             ], 403);
         }
 

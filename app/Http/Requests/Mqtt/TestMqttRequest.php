@@ -14,7 +14,7 @@ class TestMqttRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'topic' => ['required', 'string'],
+            'topic' => ['nullable', 'string'],
         ];
     }
 }

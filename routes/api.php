@@ -114,6 +114,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // =============================================
     Route::middleware('role:super_admin,technicien')->group(function () {
         Route::get('/installation-sheets', [\App\Http\Controllers\Api\InstallationSheetController::class, 'index']);
+        Route::get('/installation-sheets/{id}/pdf', [\App\Http\Controllers\Api\InstallationSheetController::class, 'pdf']);
         Route::get('/installation-sheets/{id}', [\App\Http\Controllers\Api\InstallationSheetController::class, 'show']);
         Route::post('/installation-sheets', [\App\Http\Controllers\Api\InstallationSheetController::class, 'store']);
     });
@@ -139,6 +140,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/companies', [CompanyController::class, 'store']);
         Route::put('/companies/{id}', [CompanyController::class, 'update']);
         Route::patch('/companies/{id}/toggle-active', [CompanyController::class, 'toggleActive']);
+
+        // Garantie materielle (deverrouille les plans garantie/premium pour l'entreprise)
+        Route::post('/companies/{id}/warranty', [CompanyController::class, 'activateWarranty']);
+        Route::delete('/companies/{id}/warranty', [CompanyController::class, 'stopWarranty']);
 
     });
 

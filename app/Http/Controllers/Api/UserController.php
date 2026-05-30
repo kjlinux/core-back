@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\User;
-use App\Http\Resources\UserResource;
 use App\Http\Requests\User\StoreUserRequest;
 use App\Http\Requests\User\UpdateUserRequest;
+use App\Http\Resources\UserResource;
 use App\Mail\UserCreatedMail;
-use App\Mail\UserUpdatedMail;
 use App\Mail\UserPasswordResetMail;
+use App\Mail\UserUpdatedMail;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -36,15 +36,15 @@ class UserController extends BaseApiController
         if ($authUser->isTechnicien()) {
             $activeCompanyId = $this->resolveActiveCompanyId();
             $query->where('role', '!=', 'super_admin')
-                  ->where(function ($q) use ($activeCompanyId) {
-                      // Users directement liés à l'entreprise active
-                      $q->where('company_id', $activeCompanyId)
-                        // OU techniciens sans entreprise fixe
+                ->where(function ($q) use ($activeCompanyId) {
+                    // Users directement liés à l'entreprise active
+                    $q->where('company_id', $activeCompanyId)
+                      // OU techniciens sans entreprise fixe
                         ->orWhere(function ($q2) {
                             $q2->where('role', 'technicien')
-                               ->whereNull('company_id');
+                                ->whereNull('company_id');
                         });
-                  });
+                });
         }
 
         // Filtre company_id additionnel (super_admin uniquement)
@@ -58,8 +58,8 @@ class UserController extends BaseApiController
             $q->where('role', $role);
         });
 
-        $query->when($request->has('is_active'), function ($q) use ($request) {
-            $q->where('is_active', filter_var($request->input('is_active'), FILTER_VALIDATE_BOOLEAN));
+        $query->when($request->filled('is_active'), function ($q) use ($request) {
+            $q->where('is_active', $request->boolean('is_active'));
         });
 
         $query->when($request->input('search'), function ($q, $search) {
@@ -70,7 +70,7 @@ class UserController extends BaseApiController
             });
         });
 
-        $perPage = $request->input('per_page', 15);
+        $perPage = (int) $request->input('per_page', 15);
         $users = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
         return $this->paginatedResponse(UserResource::collection($users));
@@ -86,7 +86,7 @@ class UserController extends BaseApiController
 
         // admin_enterprise can only see users from their company
         if ($authUser->isAdminEnterprise() && $user->company_id !== $authUser->company_id) {
-            return $this->errorResponse('Acces non autorise', 403);
+            return $this->errorResponse('Accès non autorisé', 403);
         }
 
         return $this->resourceResponse(new UserResource($user));
@@ -104,7 +104,7 @@ class UserController extends BaseApiController
         // admin_enterprise and technicien can only create managers in their active company
         if ($authUser->isAdminEnterprise() || $authUser->isTechnicien()) {
             if ($data['role'] !== 'manager') {
-                return $this->errorResponse('Vous ne pouvez creer que des managers', 403);
+                return $this->errorResponse('Vous ne pouvez créer que des managers', 403);
             }
             $data['company_id'] = $authUser->isTechnicien()
                 ? $this->resolveActiveCompanyId()
@@ -112,7 +112,7 @@ class UserController extends BaseApiController
         }
 
         $plainPassword = $data['password'];
-        $data['name'] = $data['first_name'] . ' ' . $data['last_name'];
+        $data['name'] = $data['first_name'].' '.$data['last_name'];
 
         $user = User::create($data);
         $user->load('company');
@@ -120,10 +120,10 @@ class UserController extends BaseApiController
         try {
             Mail::to($user->email)->send(new UserCreatedMail($user, $plainPassword));
         } catch (\Exception $e) {
-            \Log::error('UserCreatedMail failed for user ' . $user->id . ': ' . $e->getMessage());
+            \Log::error('UserCreatedMail failed for user '.$user->id.': '.$e->getMessage());
         }
 
-        return $this->resourceResponse(new UserResource($user), 'Utilisateur cree avec succes', 201);
+        return $this->resourceResponse(new UserResource($user), 'Utilisateur créé avec succès', 201);
     }
 
     /**
@@ -142,7 +142,7 @@ class UserController extends BaseApiController
                 : $authUser->company_id;
             // Cannot edit users outside their company
             if ($user->company_id !== $scopedCompanyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
             // Cannot edit non-manager users (e.g. another admin_enterprise)
             if ($user->role !== 'manager') {
@@ -150,13 +150,13 @@ class UserController extends BaseApiController
             }
             // Cannot promote a manager to a higher role
             if (isset($data['role']) && $data['role'] !== 'manager') {
-                return $this->errorResponse('Vous ne pouvez pas changer le role', 403);
+                return $this->errorResponse('Vous ne pouvez pas changer le rôle', 403);
             }
             $data['company_id'] = $scopedCompanyId;
         }
 
         if (isset($data['first_name']) || isset($data['last_name'])) {
-            $data['name'] = ($data['first_name'] ?? $user->first_name) . ' ' . ($data['last_name'] ?? $user->last_name);
+            $data['name'] = ($data['first_name'] ?? $user->first_name).' '.($data['last_name'] ?? $user->last_name);
         }
 
         $user->update($data);
@@ -165,10 +165,10 @@ class UserController extends BaseApiController
         try {
             Mail::to($user->email)->send(new UserUpdatedMail($user));
         } catch (\Exception $e) {
-            \Log::error('UserUpdatedMail failed for user ' . $user->id . ': ' . $e->getMessage());
+            \Log::error('UserUpdatedMail failed for user '.$user->id.': '.$e->getMessage());
         }
 
-        return $this->resourceResponse(new UserResource($user), 'Utilisateur mis a jour');
+        return $this->resourceResponse(new UserResource($user), 'Utilisateur mis à jour');
     }
 
     /**
@@ -184,19 +184,19 @@ class UserController extends BaseApiController
                 ? $this->resolveActiveCompanyId()
                 : $authUser->company_id;
             if ($user->company_id !== $scopedCompanyId || $user->role !== 'manager') {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
         // Cannot deactivate yourself
         if ($user->id === $authUser->id) {
-            return $this->errorResponse('Vous ne pouvez pas desactiver votre propre compte', 400);
+            return $this->errorResponse('Vous ne pouvez pas désactiver votre propre compte', 400);
         }
 
-        $user->update(['is_active' => !$user->is_active]);
+        $user->update(['is_active' => ! $user->is_active]);
         $user->load('company');
 
-        return $this->resourceResponse(new UserResource($user), 'Statut de l\'utilisateur mis a jour');
+        return $this->resourceResponse(new UserResource($user), 'Statut de l\'utilisateur mis à jour');
     }
 
     /**
@@ -212,7 +212,7 @@ class UserController extends BaseApiController
                 ? $this->resolveActiveCompanyId()
                 : $authUser->company_id;
             if ($user->company_id !== $scopedCompanyId || $user->role !== 'manager') {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
@@ -222,10 +222,10 @@ class UserController extends BaseApiController
         try {
             Mail::to($user->email)->send(new UserPasswordResetMail($user, $tempPassword));
         } catch (\Exception $e) {
-            \Log::error('UserPasswordResetMail failed for user ' . $user->id . ': ' . $e->getMessage());
+            \Log::error('UserPasswordResetMail failed for user '.$user->id.': '.$e->getMessage());
         }
 
-        return $this->successResponse(null, 'Mot de passe reinitialise avec succes');
+        return $this->successResponse(null, 'Mot de passe réinitialisé avec succès');
     }
 
     /**
@@ -233,6 +233,10 @@ class UserController extends BaseApiController
      */
     public function destroy(Request $request, string $id): JsonResponse
     {
+        if (! $request->user()->isSuperAdmin()) {
+            return $this->errorResponse('Seul un super administrateur peut supprimer un utilisateur', 403);
+        }
+
         $user = User::findOrFail($id);
 
         // Cannot delete yourself

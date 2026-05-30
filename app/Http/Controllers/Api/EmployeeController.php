@@ -66,7 +66,7 @@ class EmployeeController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $employee->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
@@ -110,7 +110,7 @@ class EmployeeController extends BaseApiController
 
         TechnicienActivityLog::record('create', 'employee', (string) $employee->id, $employee->full_name);
 
-        return $this->resourceResponse(new EmployeeResource($employee), 'Employe cree avec succes', 201);
+        return $this->resourceResponse(new EmployeeResource($employee), 'Employé créé avec succès', 201);
     }
 
     /**
@@ -124,15 +124,25 @@ class EmployeeController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $employee->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
-        $employee->update($request->validated());
+        DB::transaction(function () use ($employee, $request) {
+            $employee->update($request->validated());
+
+            $employee->user?->update([
+                'name' => $employee->first_name.' '.$employee->last_name,
+                'first_name' => $employee->first_name,
+                'last_name' => $employee->last_name,
+                'email' => $employee->email,
+                'phone' => $employee->phone,
+            ]);
+        });
 
         TechnicienActivityLog::record('update', 'employee', (string) $employee->id, $employee->first_name.' '.$employee->last_name);
 
-        return $this->resourceResponse(new EmployeeResource($employee), 'Employe mis a jour avec succes');
+        return $this->resourceResponse(new EmployeeResource($employee), 'Employé mis à jour avec succès');
     }
 
     /**
@@ -146,12 +156,16 @@ class EmployeeController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $employee->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
 
         TechnicienActivityLog::record('delete', 'employee', (string) $employee->id, $employee->first_name.' '.$employee->last_name);
-        $employee->delete();
+
+        DB::transaction(function () use ($employee) {
+            $employee->user?->update(['is_active' => false]);
+            $employee->delete();
+        });
 
         return $this->noContentResponse();
     }
@@ -167,10 +181,13 @@ class EmployeeController extends BaseApiController
         if (! $user->isSuperAdmin() && ! $user->isSupportIt()) {
             $companyId = $this->resolveActiveCompanyId();
             if ($companyId && (string) $employee->company_id !== (string) $companyId) {
-                return $this->errorResponse('Acces non autorise', 403);
+                return $this->errorResponse('Accès non autorisé', 403);
             }
         }
-        $employee->update(['is_active' => ! $employee->is_active]);
+        DB::transaction(function () use ($employee) {
+            $employee->update(['is_active' => ! $employee->is_active]);
+            $employee->user?->update(['is_active' => $employee->is_active]);
+        });
 
         TechnicienActivityLog::record(
             $employee->is_active ? 'activate' : 'deactivate',
@@ -179,6 +196,6 @@ class EmployeeController extends BaseApiController
             $employee->first_name.' '.$employee->last_name,
         );
 
-        return $this->resourceResponse(new EmployeeResource($employee), 'Statut de l\'employe mis a jour');
+        return $this->resourceResponse(new EmployeeResource($employee), 'Statut de l\'employé mis à jour');
     }
 }

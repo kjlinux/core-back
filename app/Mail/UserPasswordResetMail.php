@@ -21,7 +21,7 @@ class UserPasswordResetMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Core Tanga Group - Reinitialisation de votre mot de passe',
+            subject: 'Tangaflow - Réinitialisation de votre mot de passe',
         );
     }
 

@@ -57,8 +57,8 @@ class AdminSalesReportController extends BaseApiController
 
         $summary = [
             ['label' => 'Total commandes', 'value' => $payload['totalOrders']],
-            ['label' => 'CA total', 'value' => number_format((float) $payload['totalRevenue'], 0, ',', ' ') . ' FCFA'],
-            ['label' => 'Panier moyen', 'value' => number_format((float) $payload['averageBasket'], 0, ',', ' ') . ' FCFA'],
+            ['label' => 'CA total', 'value' => number_format((float) $payload['totalRevenue'], 0, ',', ' ').' FCFA'],
+            ['label' => 'Panier moyen', 'value' => number_format((float) $payload['averageBasket'], 0, ',', ' ').' FCFA'],
             ['label' => 'En attente', 'value' => $payload['pendingOrders']],
         ];
 
@@ -77,13 +77,13 @@ class AdminSalesReportController extends BaseApiController
     {
         $request->validate([
             'start_date' => 'nullable|date',
-            'end_date'   => 'nullable|date|after_or_equal:start_date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
             'company_id' => 'nullable|string|exists:companies,id',
         ]);
 
         $startDate = $request->input('start_date');
-        $endDate   = $request->input('end_date');
-        $user      = $request->user();
+        $endDate = $request->input('end_date');
+        $user = $request->user();
 
         $orderQuery = Order::query();
 
@@ -102,9 +102,9 @@ class AdminSalesReportController extends BaseApiController
         }
 
         // Global stats
-        $totalOrders  = (clone $orderQuery)->count();
+        $totalOrders = (clone $orderQuery)->count();
         $totalRevenue = (clone $orderQuery)->where('payment_status', 'paid')->sum('total');
-        $paidOrders   = (clone $orderQuery)->where('payment_status', 'paid')->count();
+        $paidOrders = (clone $orderQuery)->where('payment_status', 'paid')->count();
         $averageBasket = $paidOrders > 0 ? round($totalRevenue / $paidOrders) : 0;
         $pendingOrders = (clone $orderQuery)->where('status', 'pending')->count();
 
@@ -156,30 +156,30 @@ class AdminSalesReportController extends BaseApiController
             ->limit(5)
             ->get()
             ->map(fn ($item) => [
-                'name'     => $item->product_name,
-                'value'    => (int) $item->total_revenue,
+                'name' => $item->product_name,
+                'value' => (int) $item->total_revenue,
                 'quantity' => (int) $item->total_quantity,
             ]);
 
         return [
-            'totalOrders'    => $totalOrders,
-            'totalRevenue'   => $totalRevenue,
-            'averageBasket'  => $averageBasket,
-            'pendingOrders'  => $pendingOrders,
+            'totalOrders' => $totalOrders,
+            'totalRevenue' => $totalRevenue,
+            'averageBasket' => $averageBasket,
+            'pendingOrders' => $pendingOrders,
             'revenueByMonth' => $revenueByMonth,
             'ordersByStatus' => $ordersByStatus,
-            'topProducts'    => $topProducts,
+            'topProducts' => $topProducts,
         ];
     }
 
     private function translateStatus(string $status): string
     {
         return match ($status) {
-            'delivered'  => 'Livrees',
+            'delivered' => 'Livrées',
             'processing' => 'En cours',
-            'cancelled'  => 'Annulees',
-            'pending'    => 'En attente',
-            default      => $status,
+            'cancelled' => 'Annulées',
+            'pending' => 'En attente',
+            default => $status,
         };
     }
 }

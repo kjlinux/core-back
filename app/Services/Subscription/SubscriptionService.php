@@ -8,7 +8,7 @@ use App\Models\SubscriptionHistory;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
-use App\Services\Payment\IntouchService;
+use App\Services\LigdiCashService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -17,9 +17,7 @@ use RuntimeException;
 
 class SubscriptionService
 {
-    public function __construct(protected IntouchService $intouch)
-    {
-    }
+    public function __construct(protected LigdiCashService $gateway) {}
 
     /**
      * Initie un premier abonnement payant.
@@ -34,7 +32,7 @@ class SubscriptionService
         }
 
         if ($plan->requires_warranty && ! $company->isWarrantyActive()) {
-            throw new RuntimeException('Ce plan exige une garantie materielle active.');
+            throw new RuntimeException('Ce plan exige une garantie matérielle active.');
         }
 
         return $this->createPayment($company, $plan, $plan->monthly_price_xof, false, $actor);
@@ -50,7 +48,7 @@ class SubscriptionService
         $currentPlan = $this->resolvePlan($company->subscription);
 
         if ($newPlan->code === $currentPlan->code) {
-            throw new InvalidArgumentException('Le plan demande est deja actif.');
+            throw new InvalidArgumentException('Le plan demandé est déjà actif.');
         }
 
         if (! $company->isSubscriptionActive()) {
@@ -69,7 +67,7 @@ class SubscriptionService
                     'from_plan' => $currentPlan->code,
                     'to_plan' => $newPlan->code,
                     'actor_user_id' => $actor?->id,
-                    'notes' => 'Downgrade planifie en fin de cycle vers ' . $newPlan->code,
+                    'notes' => 'Downgrade planifie en fin de cycle vers '.$newPlan->code,
                     'created_at' => now(),
                 ]);
                 $company->subscription_pending_change_to = $newPlan->code;
@@ -106,7 +104,7 @@ class SubscriptionService
         }
 
         if ($company->subscription_next_period_paid) {
-            throw new RuntimeException('Le mois suivant est deja regle.');
+            throw new RuntimeException('Le mois suivant est déjà réglé.');
         }
 
         $plan = $this->resolvePlan($company->subscription);
@@ -115,7 +113,7 @@ class SubscriptionService
     }
 
     /**
-     * Active une periode payee (appele depuis le webhook InTouch au succes).
+     * Active une periode payee (appele depuis le webhook LigdiCash au succes).
      */
     public function activatePayment(SubscriptionPayment $payment): void
     {
@@ -267,7 +265,7 @@ class SubscriptionService
                 'from_plan' => $from,
                 'to_plan' => $plan->code,
                 'actor_user_id' => $actor?->id,
-                'notes' => $expiresAt ? 'Date echeance imposee : ' . $expiresAt->format('Y-m-d') : null,
+                'notes' => $expiresAt ? 'Date echeance imposee : '.$expiresAt->format('Y-m-d') : null,
                 'created_at' => now(),
             ]);
         });
@@ -285,7 +283,7 @@ class SubscriptionService
             ->where('created_at', '>', now()->subMinutes(30))
             ->first();
         if ($existingPending) {
-            throw new RuntimeException('Un paiement est deja en cours. Veuillez le finaliser ou patienter quelques minutes.');
+            throw new RuntimeException('Un paiement est déjà en cours. Veuillez le finaliser ou patienter quelques minutes.');
         }
 
         $payment = SubscriptionPayment::create([
@@ -306,8 +304,8 @@ class SubscriptionService
             return ['payment' => $payment, 'payment_url' => null, 'token' => null];
         }
 
-        $result = $this->intouch->createPayment([
-            'reference' => 'SUB-' . $payment->id,
+        $result = $this->gateway->createPayment([
+            'reference' => 'SUB-'.$payment->id,
             'amount' => $amount,
             'description' => sprintf(
                 'Abonnement %s (%s)',
@@ -315,6 +313,8 @@ class SubscriptionService
                 $prepaid ? 'mois suivant' : ($isProrata ? 'prorata upgrade' : 'mois en cours')
             ),
             'type' => 'subscription_payment',
+            'return_url' => config('ligdicash.subscription_return_url'),
+            'cancel_url' => config('ligdicash.subscription_cancel_url'),
             'customer' => [
                 'firstname' => $actor?->first_name ?? '',
                 'lastname' => $actor?->last_name ?? $company->name,
@@ -330,15 +330,15 @@ class SubscriptionService
 
         if (! ($result['success'] ?? false)) {
             $payment->payment_status = SubscriptionPayment::STATUS_FAILED;
-            $payment->intouch_response = $result;
+            $payment->gateway_response = $result;
             $payment->save();
 
-            throw new RuntimeException($result['message'] ?? 'Echec d\'initiation du paiement.');
+            throw new RuntimeException($result['message'] ?? 'Échec d\'initiation du paiement.');
         }
 
-        $payment->intouch_token = $result['token'] ?? null;
-        $payment->intouch_response = $result['raw'] ?? null;
-        $payment->payment_method = 'intouch';
+        $payment->gateway_token = $result['token'] ?? null;
+        $payment->gateway_response = $result['raw'] ?? null;
+        $payment->payment_method = 'ligdicash';
         $payment->save();
 
         return [
@@ -354,6 +354,7 @@ class SubscriptionService
         if (! $plan) {
             throw new InvalidArgumentException("Plan inconnu : {$code}");
         }
+
         return $plan;
     }
 }
