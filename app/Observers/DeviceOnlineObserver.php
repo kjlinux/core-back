@@ -13,7 +13,9 @@ class DeviceOnlineObserver
 
     public function updated($device): void
     {
-        if (!$device->wasChanged('is_online')) return;
+        if (! $device->wasChanged('is_online')) {
+            return;
+        }
 
         $kind = match (true) {
             $device instanceof \App\Models\RfidDevice => 'rfid',
@@ -21,7 +23,9 @@ class DeviceOnlineObserver
             $device instanceof \App\Models\FeelbackDevice => 'feelback',
             default => null,
         };
-        if (!$kind) return;
+        if (! $kind) {
+            return;
+        }
 
         $previous = $device->getOriginal('is_online') ? 'online' : 'offline';
         $current = $device->is_online ? 'online' : 'offline';
@@ -32,7 +36,7 @@ class DeviceOnlineObserver
             try {
                 event(DeviceStatusUpdated::fromDevice($kind, $device, $current, $previous));
             } catch (\Throwable $e) {
-                Log::warning('[DeviceOnlineObserver] broadcast online echoue: ' . $e->getMessage());
+                Log::warning('[DeviceOnlineObserver] broadcast online echoue: '.$e->getMessage());
             }
             $this->alerts->resolveByDevice($kind, $device->id, DeviceAlert::TYPE_OFFLINE_THRESHOLD);
         }

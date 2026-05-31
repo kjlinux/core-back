@@ -16,8 +16,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(\Illuminate\Http\Middleware\HandleCors::class);
 
         $middleware->alias([
-            'role'       => \App\Http\Middleware\RoleMiddleware::class,
-            'plan'       => \App\Http\Middleware\RequirePlanMiddleware::class,
+            'role' => \App\Http\Middleware\RoleMiddleware::class,
+            'plan' => \App\Http\Middleware\RequirePlanMiddleware::class,
+            'feature' => \App\Http\Middleware\RequireFeatureMiddleware::class,
             'log.report' => \App\Http\Middleware\LogReportGeneration::class,
         ]);
 

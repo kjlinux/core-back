@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
-use App\Traits\HasUuid;
 use App\Traits\BelongsToCompany;
+use App\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class QrAttendanceRecord extends Model
 {
-    use HasFactory, HasUuid, BelongsToCompany;
+    use BelongsToCompany, HasFactory, HasUuid;
 
     protected $fillable = [
         'employee_id',

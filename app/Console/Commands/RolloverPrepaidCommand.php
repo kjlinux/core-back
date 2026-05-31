@@ -9,6 +9,7 @@ use Illuminate\Console\Command;
 class RolloverPrepaidCommand extends Command
 {
     protected $signature = 'subscriptions:rollover-prepaid';
+
     protected $description = 'Bascule les compagnies qui ont paye d\'avance vers leur nouvelle periode.';
 
     public function handle(SubscriptionService $service): int
@@ -24,6 +25,7 @@ class RolloverPrepaidCommand extends Command
         }
 
         $this->info(sprintf('Total : %d rollover(s).', $companies->count()));
+
         return self::SUCCESS;
     }
 }

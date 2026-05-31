@@ -18,7 +18,7 @@ class ReviewConfigController extends BaseApiController
         $this->scopeByCompany($query);
         $config = $query->first();
 
-        if (!$config) {
+        if (! $config) {
             return $this->successResponse(null);
         }
 

@@ -18,7 +18,7 @@ class AdminSubscriptionController extends BaseApiController
     public function index(): JsonResponse
     {
         $companies = Company::query()
-            ->orderBy('name')
+            ->orderByDesc('created_at')
             ->paginate(50);
 
         return $this->paginatedResponse(CompanyResource::collection($companies));

@@ -50,7 +50,7 @@ class EnrollmentController extends BaseApiController
 
         $perPage = (int) $request->input('per_page', 15);
 
-        return $this->paginatedResponse(FingerprintEnrollmentResource::collection($query->paginate($perPage)));
+        return $this->paginatedResponse(FingerprintEnrollmentResource::collection($query->orderByDesc('created_at')->paginate($perPage)));
     }
 
     public function show(string $id): JsonResponse

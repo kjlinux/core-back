@@ -19,7 +19,7 @@ class SendMqttCommandRequest extends FormRequest
         return [
             'device_type' => ['required', 'in:rfid,biometric'],
             'device_id' => ['required', 'string'],
-            'command' => ['required', 'in:' . implode(',', $allowedCommands)],
+            'command' => ['required', 'in:'.implode(',', $allowedCommands)],
         ];
     }
 }

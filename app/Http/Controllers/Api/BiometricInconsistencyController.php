@@ -6,7 +6,6 @@ use App\Http\Resources\AttendanceRecordResource;
 use App\Models\AttendanceRecord;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class BiometricInconsistencyController extends BaseApiController
 {

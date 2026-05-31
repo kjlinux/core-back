@@ -14,6 +14,7 @@ use App\Models\FingerprintEnrollment;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\RfidCard;
+use App\Models\RfidDevice;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -280,6 +281,9 @@ class DashboardController extends BaseApiController
             ->where('attendance_records.date', $today)
             ->whereIn('attendance_records.status', ['present', 'late'])
             ->whereIn('employees.department_id', $departments->pluck('id'))
+            // Filtre company_id explicite (defense-in-depth multi-tenant) :
+            // ne jamais agréger des employés d'une autre entreprise.
+            ->when(! $isSuperAdmin, fn ($q) => $q->where('employees.company_id', $companyId))
             ->groupBy('employees.department_id')
             ->selectRaw('employees.department_id as dept_id, COUNT(*) as total')
             ->pluck('total', 'dept_id');
@@ -316,7 +320,9 @@ class DashboardController extends BaseApiController
         $companiesByModule = [];
         if ($isSuperAdmin) {
             $companiesByModule = [
-                ['label' => 'Pointage RFID', 'value' => Company::where('is_active', true)->count()],
+                // Parité avec Biométrique/Feelback : on compte les entreprises ayant
+                // déployé le module (≥ 1 terminal), pas toutes les entreprises actives.
+                ['label' => 'Pointage RFID', 'value' => RfidDevice::distinct('company_id')->count('company_id')],
                 ['label' => 'Biométrique',   'value' => BiometricDevice::distinct('company_id')->count('company_id')],
                 ['label' => 'Feelback',      'value' => FeelbackDevice::distinct('company_id')->count('company_id')],
             ];

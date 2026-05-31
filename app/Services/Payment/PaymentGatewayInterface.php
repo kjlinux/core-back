@@ -30,6 +30,13 @@ interface PaymentGatewayInterface
     public function checkStatus(string $token): array;
 
     /**
+     * Re-interroge la passerelle pour le token donne et renvoie un statut normalise :
+     * 'completed' | 'failed' | 'pending' | 'unknown'. 'unknown' signale que la passerelle
+     * n'a pas pu etre jointe ou a repondu de maniere inexploitable (a traiter en fail-open).
+     */
+    public function confirmTransaction(?string $token): string;
+
+    /**
      * Verifie la signature/integrite d'un callback.
      *
      * @param  array<string,mixed>  $data

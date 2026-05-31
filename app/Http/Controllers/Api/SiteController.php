@@ -33,7 +33,7 @@ class SiteController extends BaseApiController
         });
 
         $perPage = (int) $request->input('per_page', 15);
-        $sites = $query->paginate($perPage);
+        $sites = $query->orderByDesc('created_at')->paginate($perPage);
 
         return $this->paginatedResponse(SiteResource::collection($sites));
     }

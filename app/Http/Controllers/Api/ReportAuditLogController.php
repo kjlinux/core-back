@@ -43,9 +43,9 @@ class ReportAuditLogController extends BaseApiController
             'data' => $paginator->items(),
             'meta' => [
                 'currentPage' => $paginator->currentPage(),
-                'perPage'     => $paginator->perPage(),
-                'total'       => $paginator->total(),
-                'totalPages'  => $paginator->lastPage(),
+                'perPage' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'totalPages' => $paginator->lastPage(),
             ],
         ]);
     }

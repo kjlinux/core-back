@@ -18,8 +18,8 @@ class StoreUserRequest extends FormRequest
             'last_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:20'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'role' => ['required', 'string', 'in:super_admin,admin_enterprise,manager,technicien'],
+            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+            'role' => ['required', 'string', 'in:super_admin,admin_enterprise,manager,technicien,support_it'],
             'company_id' => ['nullable', 'exists:companies,id'],
         ];
     }

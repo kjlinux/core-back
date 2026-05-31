@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Carbon\Carbon;
 
 class AttendanceSeeder extends Seeder
 {
@@ -49,6 +49,7 @@ class AttendanceSeeder extends Seeder
                         'created_at' => $date,
                         'updated_at' => $date,
                     ];
+
                     continue;
                 }
 
@@ -66,8 +67,12 @@ class AttendanceSeeder extends Seeder
                 $exitTime = $date->copy()->setTime($exitHour, $exitMinute);
 
                 $status = 'present';
-                if ($isLate) $status = 'late';
-                if ($leftEarly) $status = 'left_early';
+                if ($isLate) {
+                    $status = 'late';
+                }
+                if ($leftEarly) {
+                    $status = 'left_early';
+                }
 
                 $isDoubleBadge = $empId === $e3 && $dayOffset === 2;
                 $source = in_array($empId, $biometricEmployees) ? 'biometric' : 'rfid';

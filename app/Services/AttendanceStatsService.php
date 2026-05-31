@@ -89,29 +89,35 @@ class AttendanceStatsService
             ];
         })->values();
 
-        if ($typeFilter === 'late') {
-            $rows = $rows->filter(fn ($r) => $r['late'] > 0)->values();
-        } elseif ($typeFilter === 'absence') {
-            $rows = $rows->filter(fn ($r) => $r['absent'] > 0)->values();
-        }
-
+        // Totaux & taux GLOBAUX calculés sur l'ensemble des employés, AVANT tout
+        // filtre d'affichage : « Taux global » et les compteurs doivent refléter
+        // toute l'entreprise, pas seulement le sous-ensemble filtré (retards/absences).
         $totalExpected = (int) $rows->sum('expected');
         $totalAttended = (int) $rows->sum('_attended');
         $globalRate = $totalExpected > 0
             ? min(100.0, round(($totalAttended / $totalExpected) * 100, 1))
             : 0.0;
 
-        $outRows = $rows->map(fn ($r) => Arr::except($r, ['_attended']))->all();
-
-        return [
-            'totalEmployees' => count($outRows),
+        $summary = [
+            'totalEmployees' => $rows->count(),
             'totalPresent' => (int) $rows->sum('present'),
             'totalAbsent' => (int) $rows->sum('absent'),
             'totalLate' => (int) $rows->sum('late'),
             'totalLeave' => (int) $rows->sum('leave'),
+            'totalExpected' => $totalExpected,
             'globalRate' => $globalRate,
-            'rows' => $outRows,
         ];
+
+        // Le filtre de type ne change QUE la liste de lignes affichée, pas les totaux.
+        if ($typeFilter === 'late') {
+            $rows = $rows->filter(fn ($r) => $r['late'] > 0)->values();
+        } elseif ($typeFilter === 'absence') {
+            $rows = $rows->filter(fn ($r) => $r['absent'] > 0)->values();
+        }
+
+        $outRows = $rows->map(fn ($r) => Arr::except($r, ['_attended']))->all();
+
+        return array_merge($summary, ['rows' => $outRows]);
     }
 
     /**

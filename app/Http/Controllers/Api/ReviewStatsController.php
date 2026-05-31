@@ -17,7 +17,7 @@ class ReviewStatsController extends BaseApiController
         $this->scopeByCompany($query);
         $config = $query->first();
 
-        if (!$config) {
+        if (! $config) {
             return $this->successResponse([
                 'totalSubmissions' => 0,
                 'averagePerQuestion' => [],
@@ -39,6 +39,7 @@ class ReviewStatsController extends BaseApiController
 
         $averagePerQuestion = $config->questions->map(function ($question) use ($avgByQuestion) {
             $avg = $avgByQuestion[$question->id] ?? null;
+
             return [
                 'questionId' => (string) $question->id,
                 'text' => $question->text,
@@ -70,7 +71,7 @@ class ReviewStatsController extends BaseApiController
         $this->scopeByCompany($query);
         $config = $query->first();
 
-        if (!$config) {
+        if (! $config) {
             return $this->paginatedResponse(ReviewSubmissionResource::collection(
                 (new \Illuminate\Pagination\LengthAwarePaginator([], 0, 15))
             ));

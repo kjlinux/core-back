@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
-use App\Traits\HasUuid;
 use App\Traits\BelongsToCompany;
+use App\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Model;
 
 class Holiday extends Model
 {
-    use HasUuid, BelongsToCompany;
+    use BelongsToCompany, HasUuid;
 
     protected $fillable = [
         'company_id',

@@ -103,7 +103,7 @@ class AdminSalesReportController extends BaseApiController
 
         // Global stats
         $totalOrders = (clone $orderQuery)->count();
-        $totalRevenue = (clone $orderQuery)->where('payment_status', 'paid')->sum('total');
+        $totalRevenue = (clone $orderQuery)->where('payment_status', 'paid')->sum('total') ?? 0;
         $paidOrders = (clone $orderQuery)->where('payment_status', 'paid')->count();
         $averageBasket = $paidOrders > 0 ? round($totalRevenue / $paidOrders) : 0;
         $pendingOrders = (clone $orderQuery)->where('status', 'pending')->count();
@@ -120,8 +120,8 @@ class AdminSalesReportController extends BaseApiController
                 DB::raw('SUM(total) as revenue'),
                 DB::raw('COUNT(*) as orders')
             )
-            ->groupByRaw('1')
-            ->orderByRaw('1')
+            ->groupBy('month')
+            ->orderBy('month')
             ->get();
 
         // Orders by status
@@ -145,6 +145,9 @@ class AdminSalesReportController extends BaseApiController
                 if ($endDate) {
                     $oq->whereDate('created_at', '<=', $endDate);
                 }
+                // Cohérence avec totalRevenue/revenueByMonth : ne compter que les
+                // commandes réellement payées (sinon le CA produit dépasse le CA total).
+                $oq->where('payment_status', 'paid');
             })
             ->select(
                 'product_name',

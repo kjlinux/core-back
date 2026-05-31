@@ -24,9 +24,12 @@ class UpdateEmployeeRequest extends FormRequest
             'email' => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($this->route('id'), 'employee_id')],
             'phone' => ['sometimes', 'string'],
             'position' => ['sometimes', 'string'],
-            'employee_number' => ['sometimes', 'string', Rule::unique('employees')->ignore($this->route('id'))],
             'hire_date' => ['sometimes', 'date'],
             'avatar' => ['sometimes', 'nullable', 'string'],
+            // Rémunération éditable à la mise à jour (était auparavant absente des
+            // règles → silencieusement ignorée par validated()).
+            'payment_mode' => ['sometimes', 'nullable', 'string', 'in:monthly,hourly,daily,weekly,forfait'],
+            'base_salary' => ['sometimes', 'nullable', 'integer', 'min:1'],
         ];
     }
 
@@ -37,7 +40,6 @@ class UpdateEmployeeRequest extends FormRequest
     {
         return [
             'email.unique' => 'Cette adresse email est déjà utilisée par un autre compte.',
-            'employee_number.unique' => 'Ce matricule est déjà attribué à un autre employé.',
         ];
     }
 }

@@ -11,21 +11,33 @@ class DeviceAlert extends Model
     use HasUuid;
 
     public const STATUS_OPEN = 'open';
+
     public const STATUS_ACKNOWLEDGED = 'acknowledged';
+
     public const STATUS_RESOLVED = 'resolved';
 
     public const SEVERITY_LOW = 'low';
+
     public const SEVERITY_MEDIUM = 'medium';
+
     public const SEVERITY_HIGH = 'high';
+
     public const SEVERITY_CRITICAL = 'critical';
 
     public const TYPE_OFFLINE_THRESHOLD = 'offline_threshold';
+
     public const TYPE_PROLONGED_OFFLINE = 'prolonged_offline';
+
     public const TYPE_OTA_FAILED = 'ota_failed';
+
     public const TYPE_BROKER_DOWN = 'broker_down';
+
     public const TYPE_REVERB_DOWN = 'reverb_down';
+
     public const TYPE_API_ERROR = 'api_error';
+
     public const TYPE_ENROLLMENT_FAILED = 'enrollment_failed';
+
     public const TYPE_LISTENER_DOWN = 'listener_down';
 
     protected $fillable = [

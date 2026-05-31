@@ -12,7 +12,7 @@ class ClientFollowupController extends BaseApiController
     public function index(Request $request): JsonResponse
     {
         $query = ClientFollowupCall::with(['company', 'installationSheet', 'assignee'])
-            ->orderBy('scheduled_at');
+            ->orderByDesc('created_at');
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
@@ -26,6 +26,7 @@ class ClientFollowupController extends BaseApiController
         if ($request->filled('overdue')) {
             $query->where('scheduled_at', '<', now())->where('status', ClientFollowupCall::STATUS_PENDING);
         }
+
         // super_admin et technicien voient tous les followups (cross-company TANGA-interne).
         return $this->paginatedResponse($query->paginate(50));
     }
@@ -33,6 +34,7 @@ class ClientFollowupController extends BaseApiController
     public function show(string $id): JsonResponse
     {
         $call = ClientFollowupCall::with(['company', 'installationSheet', 'assignee'])->findOrFail($id);
+
         return $this->successResponse($call);
     }
 
@@ -64,6 +66,7 @@ class ClientFollowupController extends BaseApiController
         $call = ClientFollowupCall::findOrFail($id);
         $call->status = ClientFollowupCall::STATUS_ESCALATED;
         $call->save();
+
         return $this->successResponse($call);
     }
 

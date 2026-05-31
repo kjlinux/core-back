@@ -18,9 +18,9 @@ class UpdateUserRequest extends FormRequest
         return [
             'first_name' => ['sometimes', 'string', 'max:255'],
             'last_name' => ['sometimes', 'string', 'max:255'],
-            'email' => ['sometimes', 'email', 'unique:users,email,' . $userId],
+            'email' => ['sometimes', 'email', 'unique:users,email,'.$userId],
             'phone' => ['nullable', 'string', 'max:20'],
-            'role' => ['sometimes', 'string', 'in:super_admin,admin_enterprise,manager,technicien'],
+            'role' => ['sometimes', 'string', 'in:super_admin,admin_enterprise,manager,technicien,support_it,employe'],
             'company_id' => ['nullable', 'exists:companies,id'],
         ];
     }

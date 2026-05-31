@@ -30,7 +30,7 @@ class ScheduleController extends BaseApiController
         });
 
         $perPage = (int) $request->input('per_page', 15);
-        $schedules = $query->paginate($perPage);
+        $schedules = $query->orderByDesc('created_at')->paginate($perPage);
 
         return $this->paginatedResponse(ScheduleResource::collection($schedules));
     }

@@ -15,7 +15,7 @@ class OtaUpdateLogResource extends JsonResource
         $deviceName = null;
         $kind = $this->device_kind;
         if (in_array($kind, ['rfid', 'biometric'], true)) {
-            if (!array_key_exists($this->device_id, self::$deviceNameCache[$kind])) {
+            if (! array_key_exists($this->device_id, self::$deviceNameCache[$kind])) {
                 $model = $kind === 'rfid' ? \App\Models\RfidDevice::class : \App\Models\BiometricDevice::class;
                 self::$deviceNameCache[$kind][$this->device_id] = $model::whereKey($this->device_id)->value('name');
             }
@@ -30,7 +30,7 @@ class OtaUpdateLogResource extends JsonResource
             'firmwareVersionId' => (string) $this->firmware_version_id,
             'firmwareVersion' => $this->when(
                 $this->relationLoaded('firmwareVersion'),
-                fn() => $this->firmwareVersion?->version
+                fn () => $this->firmwareVersion?->version
             ),
             'status' => $this->status,
             'triggeredBy' => $this->triggered_by,

@@ -8,12 +8,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class SubscriptionHistory extends Model
 {
     public const EVENT_SUBSCRIBED = 'subscribed';
+
     public const EVENT_UPGRADED = 'upgraded';
+
     public const EVENT_DOWNGRADED = 'downgraded';
+
     public const EVENT_RENEWED = 'renewed';
+
     public const EVENT_PREPAID = 'prepaid';
+
     public const EVENT_ROLLED_OVER = 'rolled_over';
+
     public const EVENT_EXPIRED = 'expired';
+
     public const EVENT_ADMIN_CHANGED = 'admin_changed';
 
     public $timestamps = false;

@@ -26,7 +26,8 @@ class AttendanceController extends BaseApiController
         $date = $request->input('date');
 
         $query = AttendanceRecord::with('employee.department')
-            ->whereDate('date', $date);
+            ->whereDate('date', $date)
+            ->orderByRaw('entry_time DESC NULLS LAST');
 
         if ($request->filled('source')) {
             $query->where('source', $request->input('source'));
@@ -249,7 +250,8 @@ class AttendanceController extends BaseApiController
 
         $query = AttendanceRecord::with('employee.department')
             ->whereDate('date', $date)
-            ->where('source', 'biometric');
+            ->where('source', 'biometric')
+            ->orderByRaw('entry_time DESC NULLS LAST');
 
         $this->applyLocationFilters($query, $request);
 

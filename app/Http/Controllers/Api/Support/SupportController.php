@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Support;
 
 use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Resources\UserResource;
 use App\Models\BiometricDevice;
 use App\Models\Company;
 use App\Models\DeviceAlert;
@@ -14,6 +15,8 @@ use App\Services\AlertService;
 use App\Services\MqttService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -23,24 +26,36 @@ class SupportController extends BaseApiController
     public function overview(Request $request): JsonResponse
     {
         $companyId = $request->input('company_id') ?: $this->resolveActiveCompanyId();
+        $cutoff = now()->subMinutes((int) config('devices.offline_threshold_minutes', 5));
 
         $apply = function ($q) use ($companyId) {
-            if ($companyId) $q->where('company_id', $companyId);
+            if ($companyId) {
+                $q->where('company_id', $companyId);
+            }
+
             return $q;
         };
+
+        // « En ligne » = is_online ET dernier signal récent (heartbeat), même
+        // définition que les pages Compagnies / Capteurs pour éviter des chiffres
+        // contradictoires entre le tableau de bord et les listes détaillées.
+        $online = fn ($model, string $timeCol) => $apply($model::query()->withoutGlobalScopes())
+            ->where('is_online', true)
+            ->where($timeCol, '>=', $cutoff)
+            ->count();
 
         $stats = [
             'rfid' => [
                 'total' => $apply(RfidDevice::query()->withoutGlobalScopes())->count(),
-                'online' => $apply(RfidDevice::query()->withoutGlobalScopes())->where('is_online', true)->count(),
+                'online' => $online(RfidDevice::class, 'last_ping_at'),
             ],
             'biometric' => [
                 'total' => $apply(BiometricDevice::query()->withoutGlobalScopes())->count(),
-                'online' => $apply(BiometricDevice::query()->withoutGlobalScopes())->where('is_online', true)->count(),
+                'online' => $online(BiometricDevice::class, 'last_sync_at'),
             ],
             'feelback' => [
                 'total' => $apply(FeelbackDevice::query()->withoutGlobalScopes())->count(),
-                'online' => $apply(FeelbackDevice::query()->withoutGlobalScopes())->where('is_online', true)->count(),
+                'online' => $online(FeelbackDevice::class, 'last_ping_at'),
             ],
             'alerts' => [
                 'open' => DeviceAlert::query()->where('status', DeviceAlert::STATUS_OPEN)
@@ -61,36 +76,63 @@ class SupportController extends BaseApiController
         $type = $request->input('type');
         $status = $request->input('status');
         $witness = $request->boolean('witness', null);
+        $search = trim((string) $request->input('search', ''));
+        $page = max(1, (int) $request->input('page', 1));
+        $perPage = max(1, (int) $request->input('per_page', 15));
 
-        $build = function ($model, string $kind, string $timeCol) use ($companyId, $siteId, $status, $witness) {
+        $cutoff = now()->subMinutes((int) config('devices.offline_threshold_minutes', 5));
+
+        $build = function ($model, string $kind, string $timeCol) use ($companyId, $siteId, $witness) {
             $q = $model::query()->withoutGlobalScopes()->with('site:id,name');
-            if ($companyId) $q->where('company_id', $companyId);
-            if ($siteId) $q->where('site_id', $siteId);
-            if ($status === 'online') $q->where('is_online', true);
-            if ($status === 'offline') $q->where('is_online', false);
-            if ($witness !== null) $q->where('is_witness', $witness);
-            return $q->get()->map(fn ($d) => [
-                'id' => $d->id,
-                'kind' => $kind,
-                'name' => $d->name ?? $d->label ?? $d->serial_number ?? $d->id,
-                'serialNumber' => $d->serial_number ?? null,
-                'companyId' => $d->company_id ?? null,
-                'siteId' => $d->site_id ?? null,
-                'siteName' => $d->site?->name,
-                'isOnline' => (bool) $d->is_online,
-                'isWitness' => (bool) ($d->is_witness ?? false),
-                'lastSeenAt' => $d->{$timeCol}?->toIso8601String(),
-                'firmwareVersion' => $d->firmware_version ?? null,
-            ]);
+            if ($companyId) {
+                $q->where('company_id', $companyId);
+            }
+            if ($siteId) {
+                $q->where('site_id', $siteId);
+            }
+            if ($witness !== null) {
+                $q->where('is_witness', $witness);
+            }
+
+            return $q->get()->map(function ($d) use ($kind, $timeCol) {
+                $lastSeen = $d->{$timeCol};
+
+                return [
+                    'id' => $d->id,
+                    'kind' => $kind,
+                    'name' => $d->name ?? $d->label ?? $d->serial_number ?? $d->id,
+                    'serialNumber' => $d->serial_number ?? null,
+                    'companyId' => $d->company_id ?? null,
+                    'siteId' => $d->site_id ?? null,
+                    'siteName' => $d->site?->name,
+                    'isOnline' => (bool) $d->is_online && $lastSeen && $lastSeen->greaterThanOrEqualTo($cutoff),
+                    'isWitness' => (bool) ($d->is_witness ?? false),
+                    'lastSeenAt' => $lastSeen?->toIso8601String(),
+                    'firmwareVersion' => $d->firmware_version ?? null,
+                    '_sort' => $lastSeen?->getTimestamp() ?? 0,
+                ];
+            });
         };
 
-        $rfid = (!$type || $type === 'rfid') ? $build(RfidDevice::class, 'rfid', 'last_ping_at') : collect();
-        $bio = (!$type || $type === 'biometric') ? $build(BiometricDevice::class, 'biometric', 'last_sync_at') : collect();
-        $feel = (!$type || $type === 'feelback') ? $build(FeelbackDevice::class, 'feelback', 'last_ping_at') : collect();
+        $rfid = (! $type || $type === 'rfid') ? $build(RfidDevice::class, 'rfid', 'last_ping_at') : collect();
+        $bio = (! $type || $type === 'biometric') ? $build(BiometricDevice::class, 'biometric', 'last_sync_at') : collect();
+        $feel = (! $type || $type === 'feelback') ? $build(FeelbackDevice::class, 'feelback', 'last_ping_at') : collect();
 
-        $all = $rfid->concat($bio)->concat($feel)->values();
+        $all = $rfid->concat($bio)->concat($feel);
 
-        return $this->successResponse($all);
+        if ($status === 'online') {
+            $all = $all->where('isOnline', true);
+        } elseif ($status === 'offline') {
+            $all = $all->where('isOnline', false);
+        }
+
+        if ($search !== '') {
+            $all = $all->filter(fn ($d) => $this->matchesSearch($d, $search, ['name', 'serialNumber', 'siteName']));
+        }
+
+        $all = $all->sortByDesc('_sort')->map(fn ($d) => Arr::except($d, ['_sort']))->values();
+
+        return $this->paginateCollection($all, $page, $perPage);
     }
 
     public function deviceDetail(string $kind, string $id): JsonResponse
@@ -102,7 +144,9 @@ class SupportController extends BaseApiController
             'qr' => \App\Models\QrCode::query()->withoutGlobalScopes()->with(['site:id,name', 'company:id,name'])->find($id),
             default => null,
         };
-        if (!$model) return $this->errorResponse('Capteur introuvable', 404);
+        if (! $model) {
+            return $this->errorResponse('Capteur introuvable', 404);
+        }
 
         $timeCol = match ($kind) {
             'biometric' => 'last_sync_at',
@@ -142,35 +186,40 @@ class SupportController extends BaseApiController
     public function pingDevice(string $kind, string $id, MqttService $mqtt): JsonResponse
     {
         $device = $this->findDevice($kind, $id);
-        if (!$device) return $this->errorResponse('Capteur introuvable', 404);
-        if (!in_array($kind, ['rfid', 'biometric'])) {
+        if (! $device) {
+            return $this->errorResponse('Capteur introuvable', 404);
+        }
+        if (! in_array($kind, ['rfid', 'biometric'])) {
             return $this->errorResponse('Type non supporté pour ping MQTT', 400);
         }
 
         $commandCode = config("mqtt.command_codes.{$kind}.STATUS");
         $prefix = config("mqtt.topics.{$kind}");
-        $responseTopic = !empty($device->mqtt_topic)
+        $responseTopic = ! empty($device->mqtt_topic)
             ? $mqtt->getResponseTopic($device->mqtt_topic)
             : "{$prefix}/{$device->serial_number}/response";
 
         try {
             $mqtt->publish($responseTopic, $commandCode);
+
             return $this->successResponse(['topic' => $responseTopic, 'command' => $commandCode]);
         } catch (\Throwable $e) {
-            return $this->errorResponse('Echec envoi commande: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Echec envoi commande: '.$e->getMessage(), 500);
         }
     }
 
     public function sendCommand(Request $request, string $kind, string $id, MqttService $mqtt): JsonResponse
     {
         $device = $this->findDevice($kind, $id);
-        if (!$device) return $this->errorResponse('Capteur introuvable', 404);
-        if (!in_array($kind, ['rfid', 'biometric'])) {
+        if (! $device) {
+            return $this->errorResponse('Capteur introuvable', 404);
+        }
+        if (! in_array($kind, ['rfid', 'biometric'])) {
             return $this->errorResponse('Type non supporté pour commande MQTT', 400);
         }
 
         $command = strtoupper((string) $request->input('command'));
-        if (!in_array($command, ['STATUS', 'REBOOT', 'RESET'])) {
+        if (! in_array($command, ['STATUS', 'REBOOT', 'RESET'])) {
             return $this->errorResponse('Commande non autorisée', 422);
         }
 
@@ -180,7 +229,7 @@ class SupportController extends BaseApiController
         }
 
         $prefix = config("mqtt.topics.{$kind}");
-        $responseTopic = !empty($device->mqtt_topic)
+        $responseTopic = ! empty($device->mqtt_topic)
             ? $mqtt->getResponseTopic($device->mqtt_topic)
             : "{$prefix}/{$device->serial_number}/response";
 
@@ -192,15 +241,19 @@ class SupportController extends BaseApiController
                 'device_id' => $id,
                 'command' => $command,
             ]);
+
             return $this->successResponse(['topic' => $responseTopic, 'command' => $command]);
         } catch (\Throwable $e) {
-            return $this->errorResponse('Echec envoi commande: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Echec envoi commande: '.$e->getMessage(), 500);
         }
     }
 
     public function listWitnesses(Request $request): JsonResponse
     {
         $companyId = $request->input('company_id') ?: $this->resolveActiveCompanyId();
+        $search = trim((string) $request->input('search', ''));
+        $page = max(1, (int) $request->input('page', 1));
+        $perPage = max(1, (int) $request->input('per_page', 15));
 
         $applyCompany = fn ($q) => $companyId ? $q->where('company_id', $companyId) : $q;
 
@@ -243,24 +296,37 @@ class SupportController extends BaseApiController
             ->concat($map($qr, 'qr', null))
             ->values();
 
-        return $this->successResponse($all);
+        if ($search !== '') {
+            $all = $all->filter(fn ($d) => $this->matchesSearch($d, $search, ['name', 'serialNumber', 'siteName']))->values();
+        }
+
+        // Plus recemment actifs en premier (lastSeenAt ISO8601 trie lexicalement = chronologiquement ; null en dernier).
+        $all = $all->sortByDesc('lastSeenAt')->values();
+
+        return $this->paginateCollection($all, $page, $perPage);
     }
 
     public function markWitness(string $kind, string $id): JsonResponse
     {
         $device = $this->findDevice($kind, $id);
-        if (!$device) return $this->errorResponse('Capteur introuvable', 404);
+        if (! $device) {
+            return $this->errorResponse('Capteur introuvable', 404);
+        }
         $device->is_witness = true;
         $device->save();
+
         return $this->successResponse(['id' => $id, 'kind' => $kind, 'isWitness' => true]);
     }
 
     public function unmarkWitness(string $kind, string $id): JsonResponse
     {
         $device = $this->findDevice($kind, $id);
-        if (!$device) return $this->errorResponse('Capteur introuvable', 404);
+        if (! $device) {
+            return $this->errorResponse('Capteur introuvable', 404);
+        }
         $device->is_witness = false;
         $device->save();
+
         return $this->successResponse(['id' => $id, 'kind' => $kind, 'isWitness' => false]);
     }
 
@@ -276,6 +342,7 @@ class SupportController extends BaseApiController
             ->orderByDesc('created_at');
 
         $paginator = $q->paginate($perPage);
+
         return response()->json([
             'data' => $paginator->items(),
             'meta' => [
@@ -295,6 +362,7 @@ class SupportController extends BaseApiController
             'acknowledged_by' => auth()->id(),
             'acknowledged_at' => now(),
         ]);
+
         return $this->successResponse($alert);
     }
 
@@ -302,6 +370,7 @@ class SupportController extends BaseApiController
     {
         $alert = DeviceAlert::findOrFail($id);
         $svc->resolve($alert);
+
         return $this->successResponse($alert->refresh());
     }
 
@@ -309,10 +378,18 @@ class SupportController extends BaseApiController
     {
         $threshold = (int) config('devices.offline_threshold_minutes', 5);
         $cutoff = now()->subMinutes($threshold);
+        $search = trim((string) $request->input('search', ''));
+        $perPage = max(1, (int) $request->input('per_page', 15));
+        $page = max(1, (int) $request->input('page', 1));
 
-        $companies = Company::query()->orderBy('name')->get();
+        // Recherche et pagination en SQL sur `companies` ; l'enrichissement coûteux
+        // (compteurs capteurs / alertes) n'est calculé que pour la page courante.
+        $paginator = Company::query()
+            ->when($search !== '', fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower($search).'%']))
+            ->orderByDesc('created_at')
+            ->paginate($perPage, ['*'], 'page', $page);
 
-        $rows = $companies->map(function (Company $c) use ($cutoff) {
+        $rows = collect($paginator->items())->map(function (Company $c) use ($cutoff) {
             $counts = $this->deviceCountsForCompany($c->id, $cutoff);
 
             return [
@@ -332,13 +409,23 @@ class SupportController extends BaseApiController
             ];
         });
 
-        return $this->successResponse($rows->values());
+        return response()->json([
+            'data' => $rows->values(),
+            'meta' => [
+                'currentPage' => $paginator->currentPage(),
+                'perPage' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'totalPages' => $paginator->lastPage(),
+            ],
+        ]);
     }
 
     public function companyDetail(string $id): JsonResponse
     {
         $company = Company::query()->find($id);
-        if (!$company) return $this->errorResponse('Compagnie introuvable', 404);
+        if (! $company) {
+            return $this->errorResponse('Compagnie introuvable', 404);
+        }
 
         $threshold = (int) config('devices.offline_threshold_minutes', 5);
         $cutoff = now()->subMinutes($threshold);
@@ -349,7 +436,7 @@ class SupportController extends BaseApiController
             ->get(['id', 'first_name', 'last_name', 'email', 'phone', 'role', 'is_active'])
             ->map(fn ($u) => [
                 'id' => $u->id,
-                'name' => trim(($u->first_name ?? '') . ' ' . ($u->last_name ?? '')) ?: $u->email,
+                'name' => trim(($u->first_name ?? '').' '.($u->last_name ?? '')) ?: $u->email,
                 'email' => $u->email,
                 'phone' => $u->phone,
                 'role' => $u->role,
@@ -380,7 +467,9 @@ class SupportController extends BaseApiController
     public function resetUserPassword(string $userId): JsonResponse
     {
         $user = User::query()->find($userId);
-        if (!$user) return $this->errorResponse('Utilisateur introuvable', 404);
+        if (! $user) {
+            return $this->errorResponse('Utilisateur introuvable', 404);
+        }
         if ($user->role === 'super_admin') {
             return $this->errorResponse('Action non autorisée sur un super administrateur', 403);
         }
@@ -398,6 +487,126 @@ class SupportController extends BaseApiController
         return $this->successResponse([
             'userId' => $user->id,
             'tempPassword' => $tempPassword,
+        ]);
+    }
+
+    /**
+     * Prise de contrôle d'une entreprise : émet un token agissant comme son compte
+     * administrateur (admin_enterprise actif le plus ancien).
+     */
+    public function impersonateCompany(string $id): JsonResponse
+    {
+        $company = Company::query()->find($id);
+        if (! $company) {
+            return $this->errorResponse('Compagnie introuvable', 404);
+        }
+
+        $target = User::query()
+            ->where('company_id', $id)
+            ->where('role', 'admin_enterprise')
+            ->where('is_active', true)
+            ->oldest('id')
+            ->first();
+
+        if (! $target) {
+            return $this->errorResponse('Aucun compte administrateur actif à contrôler pour cette entreprise', 422);
+        }
+
+        return $this->successResponse($this->buildImpersonationPayload($target));
+    }
+
+    /**
+     * Prise de contrôle d'un utilisateur précis (depuis la fiche entreprise).
+     */
+    public function impersonateUser(string $userId): JsonResponse
+    {
+        $target = User::query()->with('company')->find($userId);
+        if (! $target) {
+            return $this->errorResponse('Utilisateur introuvable', 404);
+        }
+        if ($target->role === 'super_admin') {
+            return $this->errorResponse('Action non autorisée sur un super administrateur', 403);
+        }
+        if ((string) $target->id === (string) auth()->id()) {
+            return $this->errorResponse('Action non autorisée', 422);
+        }
+        if (! $target->company_id) {
+            return $this->errorResponse("Cet utilisateur n'est rattaché à aucune entreprise", 422);
+        }
+
+        return $this->successResponse($this->buildImpersonationPayload($target));
+    }
+
+    /**
+     * Émet le token d'impersonation pour le compte cible, journalise l'action et
+     * renvoie le payload attendu par le front (token + user + identité du support).
+     *
+     * @return array<string, mixed>
+     */
+    protected function buildImpersonationPayload(User $target): array
+    {
+        $support = auth()->user();
+        $target->loadMissing('company');
+
+        $token = $target->createToken(
+            'impersonation:by='.$support->id,
+            ['*'],
+            now()->addHours(2),
+        )->plainTextToken;
+
+        Log::warning('[Support] prise de controle compte', [
+            'support_user_id' => $support->id,
+            'target_user_id' => $target->id,
+            'company_id' => $target->company_id,
+        ]);
+
+        return [
+            'accessToken' => $token,
+            'user' => new UserResource($target),
+            'impersonator' => [
+                'id' => (string) $support->id,
+                'name' => trim(($support->first_name ?? '').' '.($support->last_name ?? '')) ?: $support->email,
+            ],
+        ];
+    }
+
+    /**
+     * Filtre une ligne de capteur normalisée par recherche texte sur des champs donnés.
+     *
+     * @param  array<string, mixed>  $row
+     * @param  array<int, string>  $fields
+     */
+    protected function matchesSearch(array $row, string $search, array $fields): bool
+    {
+        $needle = mb_strtolower($search);
+        foreach ($fields as $field) {
+            if (str_contains(mb_strtolower((string) ($row[$field] ?? '')), $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Pagine une collection en mémoire et renvoie l'enveloppe { data, meta } attendue
+     * par le front (PaginatedResponse). Utilisé pour les listes fusionnées multi-modèles.
+     */
+    protected function paginateCollection(Collection $items, int $page, int $perPage): JsonResponse
+    {
+        $total = $items->count();
+        $totalPages = (int) max(1, (int) ceil($total / $perPage));
+        $page = min($page, $totalPages);
+        $slice = $items->slice(($page - 1) * $perPage, $perPage)->values();
+
+        return response()->json([
+            'data' => $slice,
+            'meta' => [
+                'currentPage' => $page,
+                'perPage' => $perPage,
+                'total' => $total,
+                'totalPages' => $totalPages,
+            ],
         ]);
     }
 

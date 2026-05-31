@@ -26,7 +26,8 @@ class AppServiceProvider extends ServiceProvider
     {
         ResetPassword::createUrlUsing(function ($user, string $token) {
             $frontendUrl = rtrim((string) config('app.frontend_url'), '/');
-            return $frontendUrl . '/reset-password?token=' . $token . '&email=' . urlencode($user->email);
+
+            return $frontendUrl.'/reset-password?token='.$token.'&email='.urlencode($user->email);
         });
 
         RfidDevice::observe(DeviceOnlineObserver::class);

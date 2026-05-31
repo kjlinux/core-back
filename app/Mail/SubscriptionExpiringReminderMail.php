@@ -14,9 +14,7 @@ class SubscriptionExpiringReminderMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public Company $company, public int $daysLeft)
-    {
-    }
+    public function __construct(public Company $company, public int $daysLeft) {}
 
     public function envelope(): Envelope
     {

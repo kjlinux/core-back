@@ -61,7 +61,7 @@ class FeelbackStatsController extends BaseApiController
     {
         $user = $request->user();
         $siteQuery = Site::where('id', $agencyId);
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $siteQuery->where('company_id', $this->resolveActiveCompanyId());
         }
         $site = $siteQuery->firstOrFail();

@@ -6,11 +6,15 @@ use App\Events\AttendanceRecorded;
 use App\Events\CardScanned;
 use App\Events\DeviceStatusUpdated;
 use App\Models\AttendanceRecord;
+use App\Models\DeviceAlert;
+use App\Models\DeviceLog;
 use App\Models\OtaUpdateLog;
 use App\Models\RfidCard;
 use App\Models\RfidDevice;
+use App\Services\AlertService;
 use App\Services\ScheduleResolverService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 use PhpMqtt\Client\ConnectionSettings;
 use PhpMqtt\Client\MqttClient;
 
@@ -112,12 +116,38 @@ class MqttListenRfidCommand extends Command
             return;
         }
 
+        // Last Will MQTT : le broker publie {"status":"offline"} sur .../event des que le
+        // terminal se deconnecte (coupure secteur/reseau). Detection quasi instantanee, sans
+        // attendre le seuil de health:check-devices. A traiter AVANT la branche heartbeat
+        // (sans card_uid) qui sinon le prendrait pour un signe de vie et le remettrait en ligne.
+        if (($data['status'] ?? null) === 'offline') {
+            $this->info('Last Will recu (terminal hors ligne)');
+            $parts = explode('/', $topic);
+            $serial = $parts[3] ?? null;
+            if ($serial && ($device = RfidDevice::where('serial_number', $serial)->first())) {
+                $this->markOfflineFromLwt($device);
+            }
+
+            return;
+        }
+
         // Reponse OTA : l'ESP32 publie {event:"ota_result",log_id,success,version,error}
         // sur core/rfid/sensor/{serial}/event apres flash.
         if (($data['event'] ?? null) === 'ota_result') {
             $parts = explode('/', $topic);
             $serial = $parts[3] ?? null;
             $this->processOtaResponse($data, $serial);
+
+            return;
+        }
+
+        // Log applicatif distant : le firmware publie {event:"log",level,message,uptime,version}
+        // sur core/rfid/sensor/{serial}/event pour les niveaux warning/error/critical. A traiter
+        // AVANT la branche heartbeat (sans card_uid) qui sinon le prendrait pour un signe de vie.
+        if (($data['event'] ?? null) === 'log') {
+            $parts = explode('/', $topic);
+            $serial = $parts[3] ?? null;
+            $this->processDeviceLog($data, $serial);
 
             return;
         }
@@ -177,7 +207,7 @@ class MqttListenRfidCommand extends Command
         if (($data['type'] ?? null) === 'scan') {
             $this->info("Scan d'enregistrement recu: UID={$cardUid}");
             if ($device) {
-                event(new CardScanned($cardUid, (string) $device->id));
+                event(new CardScanned($cardUid, (string) $device->id, (string) $device->company_id));
             }
 
             return;
@@ -207,6 +237,16 @@ class MqttListenRfidCommand extends Command
         $employee = $card->employee;
         if (! $employee || ! $employee->is_active) {
             $this->warn("Employe inactif ou non assigne pour carte: {$cardUid}");
+            $this->mqtt->publish($responseTopic, config('mqtt.response_codes.refused'), MqttClient::QOS_AT_LEAST_ONCE);
+
+            return;
+        }
+
+        // Cloisonnement multi-tenant : la carte/employe doit appartenir a la MEME entreprise
+        // que le terminal. Une carte mal assignee (ou un message MQTT usurpe) ne doit jamais
+        // creer ni alterer le pointage d'une autre entreprise.
+        if ($device && (string) $employee->company_id !== (string) $device->company_id) {
+            $this->warn("Carte {$cardUid} rattachee a une autre entreprise que le terminal {$uniqueId} — refuse");
             $this->mqtt->publish($responseTopic, config('mqtt.response_codes.refused'), MqttClient::QOS_AT_LEAST_ONCE);
 
             return;
@@ -296,9 +336,18 @@ class MqttListenRfidCommand extends Command
         $version = $data['version'] ?? null;
         $errorMsg = $data['error'] ?? null;
 
-        // Mettre à jour le log OTA
+        // Mettre à jour le log OTA — uniquement s'il appartient bien au terminal (RFID) qui
+        // a publie le message. Sans cette verification, un message usurpe avec un log_id d'une
+        // autre entreprise pourrait corrompre son suivi de mise a jour firmware.
         if ($logId) {
-            $log = OtaUpdateLog::find($logId);
+            $device = $serial ? RfidDevice::where('serial_number', $serial)->first() : null;
+
+            $log = $device
+                ? OtaUpdateLog::where('device_id', $device->id)
+                    ->where('device_kind', 'rfid')
+                    ->find($logId)
+                : null;
+
             if ($log) {
                 $log->update([
                     'status' => $success ? 'success' : 'failed',
@@ -307,7 +356,7 @@ class MqttListenRfidCommand extends Command
                 ]);
                 $this->info("OtaUpdateLog {$logId} mis a jour : ".($success ? 'success' : 'failed'));
             } else {
-                $this->warn("OtaUpdateLog introuvable: {$logId}");
+                $this->warn("OtaUpdateLog {$logId} introuvable ou n'appartient pas au terminal {$serial}");
             }
         }
 
@@ -317,6 +366,50 @@ class MqttListenRfidCommand extends Command
                 ->update(['firmware_version' => $version]);
             $this->info("Firmware RFID {$serial} mis a jour vers {$version}");
         }
+    }
+
+    /**
+     * Persiste un log applicatif remonte par le terminal (warning/error/critical).
+     * Aucune action sur le statut en ligne du terminal : un message d'erreur n'est pas
+     * un heartbeat. Les logs alimentent le digest quotidien (device-logs:send-digest).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function processDeviceLog(array $data, ?string $serial): void
+    {
+        $message = trim((string) ($data['message'] ?? ''));
+        if ($message === '') {
+            $this->warn('Log terminal ignore : message vide');
+
+            return;
+        }
+
+        $allowedLevels = ['debug', 'info', 'warning', 'error', 'critical'];
+        $level = strtolower((string) ($data['level'] ?? 'info'));
+        if (! in_array($level, $allowedLevels, true)) {
+            $level = 'info';
+        }
+
+        $device = $serial ? RfidDevice::where('serial_number', $serial)->first() : null;
+
+        $context = array_filter([
+            'uptime' => $data['uptime'] ?? null,
+            'ip' => $data['ip'] ?? null,
+        ], static fn ($value) => $value !== null);
+
+        DeviceLog::create([
+            'company_id' => $device?->company_id,
+            'site_id' => $device?->site_id,
+            'device_id' => $device?->id,
+            'device_kind' => 'rfid',
+            'serial_number' => $serial,
+            'level' => $level,
+            'message' => mb_substr($message, 0, 1000),
+            'firmware_version' => $data['version'] ?? $device?->firmware_version,
+            'context' => $context ?: null,
+        ]);
+
+        $this->info("[device-log] {$serial} [{$level}] {$message}");
     }
 
     /**
@@ -337,6 +430,50 @@ class MqttListenRfidCommand extends Command
         if ($wasOffline) {
             $this->retryPendingOtaUpdates($device);
         }
+    }
+
+    /**
+     * Marque le terminal hors ligne suite a un Last Will MQTT et leve l'alerte
+     * correspondante. Replique le comportement de CheckDeviceHealthCommand car la
+     * tache planifiee ne scanne que les terminaux is_online=true et ignorerait donc
+     * un terminal deja bascule hors ligne ici.
+     */
+    private function markOfflineFromLwt(RfidDevice $device): void
+    {
+        if (! $device->is_online) {
+            return;
+        }
+
+        $device->is_online = false;
+        $device->save();
+
+        $context = [
+            'serial_number' => $device->serial_number ?? null,
+            'last_seen' => $device->last_ping_at?->toISOString(),
+            'is_witness' => (bool) ($device->is_witness ?? false),
+            'reason' => 'lwt',
+        ];
+
+        try {
+            event(DeviceStatusUpdated::fromDevice('rfid', $device, 'offline', 'online', [
+                'last_seen' => $device->last_ping_at?->toISOString(),
+                'reason' => 'lwt',
+            ]));
+        } catch (\Throwable $e) {
+            Log::warning('[mqtt:listen-rfid] broadcast offline LWT echoue: '.$e->getMessage());
+        }
+
+        app(AlertService::class)->openOrUpdate([
+            'company_id' => $device->company_id ?? null,
+            'site_id' => $device->site_id ?? null,
+            'device_id' => $device->id,
+            'device_kind' => 'rfid',
+            'type' => DeviceAlert::TYPE_OFFLINE_THRESHOLD,
+            'severity' => $device->is_witness ? DeviceAlert::SEVERITY_CRITICAL : DeviceAlert::SEVERITY_HIGH,
+            'title' => 'Capteur rfid hors ligne : '.($device->name ?? $device->serial_number ?? $device->id),
+            'message' => 'Deconnexion detectee (Last Will MQTT). Dernier contact: '.($device->last_ping_at?->locale('fr')->diffForHumans() ?? 'inconnu'),
+            'context' => $context,
+        ]);
     }
 
     /**

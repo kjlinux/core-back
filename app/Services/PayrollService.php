@@ -67,8 +67,14 @@ class PayrollService
         string $period,
     ): Payslip {
         $paymentMode = $employee->payment_mode ?? $config?->default_payment_mode ?? 'monthly';
+        // Les déductions d'absence/retard ne s'appliquent qu'aux modes à salaire fixe.
+        // Pour les modes horaire/journalier/hebdomadaire, le brut reflète déjà uniquement
+        // le temps réellement travaillé — re-déduire les absences serait une double pénalité,
+        // et base_salary y représente un taux (par heure/jour) et non un montant mensuel.
+        $isFixedSalaryMode = in_array($paymentMode, ['monthly', 'forfait'], true);
         $baseSalary = $employee->base_salary ?? 0;
         $workingDays = $config?->working_days_per_month ?? 26;
+        $workingDaysPerWeek = $config?->working_days_per_week ?? 5;
         $dailyHours = $config?->standard_daily_hours ?? 8;
 
         // Charger les presences de la periode
@@ -76,34 +82,48 @@ class PayrollService
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
             ->get();
 
-        // Calcul des jours et heures travailles
-        $workedDays = $records->count();
+        // Jours travaillés : on ne compte QUE les pointages de présence réelle.
+        // Les enregistrements 'absent' / 'on_leave' ne sont PAS du temps travaillé
+        // et ne doivent pas gonfler workedDays (sinon les absences sont sous-estimées).
+        // Une journée partielle (un seul pointage) compte pour une demi-journée.
+        $presenceStatuses = ['present', 'late', 'left_early', 'complete'];
+        $workedDays = $records->whereIn('status', $presenceStatuses)->count()
+            + $records->where('status', 'partial')->count() * 0.5;
         $workedHours = $records->sum(function ($r) {
             if (! $r->entry_time || ! $r->exit_time) {
                 return 0;
             }
 
-            return Carbon::parse($r->entry_time)->diffInMinutes(Carbon::parse($r->exit_time)) / 60;
+            // max(0, …) : garde-fou si entry_time > exit_time (saisie ou horodatage
+            // inversé) pour ne jamais soustraire des heures au temps travaillé.
+            return max(0, Carbon::parse($r->entry_time)->diffInMinutes(Carbon::parse($r->exit_time)) / 60);
         });
 
         // Jours de conge approuves dans la periode : ne doivent pas etre comptes
         // comme absences ni generer de penalite retard
         $leaveDays = $this->countApprovedLeaveDays($employee->id, $start, $end);
 
-        // Calcul des absences : pro-rata si l'employé a rejoint en cours de période
-        $hiredAt = $employee->created_at ? Carbon::parse($employee->created_at)->startOfDay() : null;
+        // Jours ouvrables effectivement attendus sur la période. Base COMMUNE au
+        // calcul des absences, au taux journalier des déductions et au seuil
+        // d'heures supplémentaires — pour éviter toute incohérence entre eux.
+        // Pro-rata si l'employé a été embauché en cours de période. On se base sur la
+        // date d'embauche reelle (hire_date), pas sur created_at (date de creation de la
+        // fiche en base, souvent posterieure a l'embauche : imports, reprise de donnees).
+        // Meme ancrage que AttendanceStatsService::hireAnchor().
+        $hireRaw = $employee->hire_date ?? $employee->created_at;
+        $hiredAt = $hireRaw ? Carbon::parse($hireRaw)->startOfDay() : null;
+        $effectiveWorkingDays = $workingDays;
         if ($hiredAt && $hiredAt->gt($end)) {
-            // Employé embauché après la fin de période — aucun jour ouvrable attendu
-            $absentDays = 0;
+            // Embauché après la fin de période — aucun jour ouvrable attendu
+            $effectiveWorkingDays = 0;
         } elseif ($hiredAt && $hiredAt->gt($start)) {
             // Proportionnel : jours_employé_dans_période / jours_totaux_période × workingDays
             $totalPeriodDays = $start->diffInDays($end) + 1;
             $employeeDaysInPeriod = $hiredAt->diffInDays($end) + 1;
             $effectiveWorkingDays = (int) round($workingDays * $employeeDaysInPeriod / $totalPeriodDays);
-            $absentDays = max(0, $effectiveWorkingDays - $workedDays);
-        } else {
-            $absentDays = max(0, $workingDays - $workedDays);
         }
+
+        $absentDays = max(0, $effectiveWorkingDays - $workedDays);
 
         // Soustraire les jours en conge approuve : non penalises comme absences
         $absentDays = max(0, $absentDays - $leaveDays);
@@ -120,9 +140,11 @@ class PayrollService
         // Calcul du salaire brut selon le mode
         $grossAmount = match ($paymentMode) {
             'monthly' => $baseSalary,
-            'daily' => $baseSalary * $workedDays,
+            'daily' => (int) round($baseSalary * $workedDays),
             'hourly' => (int) round($baseSalary * $workedHours),
-            'weekly' => (int) round($baseSalary * ($workedDays / 5)),
+            // Hebdomadaire : base_salary = taux HEBDOMADAIRE ; nombre de semaines
+            // travaillées = jours travaillés / jours travaillés par semaine (config).
+            'weekly' => (int) round($baseSalary * ($workedDays / max(1, $workingDaysPerWeek))),
             'forfait' => $baseSalary,
             default => $baseSalary,
         };
@@ -132,31 +154,42 @@ class PayrollService
         $overtimeAmount = 0;
         $overtimeRate = $config?->overtime_rate ?? 1.0;
         if ($config?->overtime_enabled && $paymentMode === 'hourly' && $overtimeRate > 1.0) {
-            $standardHours = $workingDays * $dailyHours;
+            // Seuil pro-raté sur la période réelle (cohérent avec les absences),
+            // sinon une période partielle comparée à 26 jours fausse les heures sup.
+            $standardHours = $effectiveWorkingDays * $dailyHours;
             $overtimeHours = max(0, $workedHours - $standardHours);
             $hourlyRate = $baseSalary;
             $overtimeAmount = (int) round($overtimeHours * $hourlyRate * ($overtimeRate - 1));
             $grossAmount += $overtimeAmount;
         }
 
-        // Deduction absences (prorata jours ouvrables)
+        // Deduction absences (prorata jours ouvrables) — uniquement en mode salaire fixe
         $absenceDeduction = 0;
-        if ($baseSalary > 0 && $workingDays > 0) {
-            $dailySalary = $baseSalary / $workingDays;
+        if ($isFixedSalaryMode && $baseSalary > 0 && $effectiveWorkingDays > 0) {
+            // Taux journalier basé sur les jours attendus de la période (mêmes que
+            // pour le décompte des absences) afin que déduction et absences soient
+            // calculées sur la même base.
+            $dailySalary = $baseSalary / $effectiveWorkingDays;
             $absenceDeduction = (int) round($dailySalary * $absentDays);
         }
 
-        // Deduction retards
+        // Deduction retards — uniquement en mode salaire fixe (sinon déjà reflété dans le brut)
         $latenessDeduction = 0;
-        if ($config?->lateness_deduction_enabled && $totalLatenessMinutes > 0 && $config->latenessRules->isNotEmpty()) {
+        if ($isFixedSalaryMode && $config?->lateness_deduction_enabled && $totalLatenessMinutes > 0 && $config->latenessRules->isNotEmpty()) {
             $latenessDeduction = $this->calculateLatenessDeduction(
                 $totalLatenessMinutes,
                 $baseSalary,
-                $workingDays,
+                $effectiveWorkingDays,
                 $dailyHours,
                 $config->latenessRules,
             );
         }
+
+        // Garde-fou : les déductions ne peuvent jamais dépasser le brut.
+        // On plafonne d'abord les absences, puis les retards sur le reliquat,
+        // pour que la colonne « Déductions » et le net restent cohérents (net >= 0).
+        $absenceDeduction = min($absenceDeduction, $grossAmount);
+        $latenessDeduction = min($latenessDeduction, max(0, $grossAmount - $absenceDeduction));
 
         $netAmount = max(0, $grossAmount - $absenceDeduction - $latenessDeduction);
 
@@ -171,9 +204,9 @@ class PayrollService
                 'period_end' => $end->toDateString(),
                 'payment_mode' => $paymentMode,
                 'base_salary' => $baseSalary,
-                'worked_days' => $workedDays,
+                'worked_days' => (int) round($workedDays),
                 'worked_hours' => round($workedHours, 2),
-                'absent_days' => $absentDays,
+                'absent_days' => (int) round($absentDays),
                 'total_lateness_minutes' => $totalLatenessMinutes,
                 'overtime_hours' => round($overtimeHours, 2),
                 'overtime_amount' => $overtimeAmount,

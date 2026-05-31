@@ -40,7 +40,7 @@ class ProductController extends BaseApiController
             });
         }
 
-        $products = $query->paginate((int) $request->input('per_page', 15));
+        $products = $query->orderByDesc('created_at')->paginate((int) $request->input('per_page', 15));
 
         return $this->paginatedResponse(ProductResource::collection($products));
     }

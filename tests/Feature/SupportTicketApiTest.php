@@ -1,8 +1,10 @@
 <?php
 
 use App\Models\Company;
+use App\Models\SubscriptionPlan;
 use App\Models\SupportTicket;
 use App\Models\User;
+use Database\Seeders\SubscriptionPlanSeeder;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
@@ -33,6 +35,7 @@ beforeEach(function () {
         $t->string('role')->default('employe');
         $t->uuid('company_id')->nullable();
         $t->uuid('employee_id')->nullable();
+        $t->string('avatar')->nullable();
         $t->boolean('is_active')->default(true);
         $t->timestamps();
     });
@@ -42,6 +45,21 @@ beforeEach(function () {
         $t->string('name')->nullable();
         $t->string('phone')->nullable();
         $t->string('email')->nullable();
+        $t->string('subscription')->default(SubscriptionPlan::FREEMIUM);
+        $t->timestamp('subscription_starts_at')->nullable();
+        $t->timestamp('subscription_expires_at')->nullable();
+        $t->timestamps();
+    });
+
+    Schema::create('subscription_plans', function (Blueprint $t) {
+        $t->id();
+        $t->string('code')->unique();
+        $t->string('name');
+        $t->integer('monthly_price_xof')->default(0);
+        $t->json('features')->nullable();
+        $t->boolean('requires_warranty')->default(false);
+        $t->boolean('is_active')->default(true);
+        $t->integer('sort_order')->default(0);
         $t->timestamps();
     });
 
@@ -58,10 +76,13 @@ beforeEach(function () {
         $t->timestamp('resolved_at')->nullable();
         $t->timestamps();
     });
+
+    (new SubscriptionPlanSeeder)->run();
 });
 
 afterEach(function () {
     Schema::dropIfExists('support_tickets');
+    Schema::dropIfExists('subscription_plans');
     Schema::dropIfExists('companies');
     Schema::dropIfExists('users');
 });
@@ -70,10 +91,14 @@ afterEach(function () {
 
 function ticketCompany(string $name = 'ACME'): Company
 {
+    // Le support dedie (ouverture de ticket) requiert un plan Garantie/Premium actif.
     return Company::create([
         'name' => $name,
         'phone' => '0102030405',
         'email' => strtolower($name).'@example.com',
+        'subscription' => SubscriptionPlan::GARANTIE,
+        'subscription_starts_at' => now()->subWeek(),
+        'subscription_expires_at' => now()->addMonth(),
     ]);
 }
 

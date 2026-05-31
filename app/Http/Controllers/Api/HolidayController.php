@@ -29,7 +29,7 @@ class HolidayController extends BaseApiController
         });
 
         $perPage = (int) $request->input('per_page', 15);
-        $holidays = $query->paginate($perPage);
+        $holidays = $query->orderByDesc('date')->paginate($perPage);
 
         return $this->paginatedResponse(HolidayResource::collection($holidays));
     }

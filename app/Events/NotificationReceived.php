@@ -20,7 +20,7 @@ class NotificationReceived implements ShouldBroadcastNow
      */
     public function broadcastOn(): array
     {
-        return [new PrivateChannel('notifications.' . $this->notification->user_id)];
+        return [new PrivateChannel('notifications.'.$this->notification->user_id)];
     }
 
     public function broadcastAs(): string

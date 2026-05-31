@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 class CleanupTestDataCommand extends Command
 {
     protected $signature = 'cleanup:test-data {--force : Skip confirmation} {--dry-run : Affiche ce qui serait supprime sans rien faire}';
+
     protected $description = 'Supprime les compagnies marquees is_test=true et toutes leurs donnees liees.';
 
     public function handle(): int
@@ -22,6 +23,7 @@ class CleanupTestDataCommand extends Command
         $companies = Company::where('is_test', true)->get();
         if ($companies->isEmpty()) {
             $this->info('Aucune compagnie de test a supprimer.');
+
             return self::SUCCESS;
         }
 
@@ -31,11 +33,13 @@ class CleanupTestDataCommand extends Command
 
         if ($this->option('dry-run')) {
             $this->warn('Dry-run : aucune suppression effectuee.');
+
             return self::SUCCESS;
         }
 
         if (! $this->option('force') && ! $this->confirm('Confirmer la suppression definitive ?')) {
             $this->warn('Annule.');
+
             return self::SUCCESS;
         }
 
@@ -50,6 +54,7 @@ class CleanupTestDataCommand extends Command
         });
 
         $this->info(sprintf('Total : %d compagnie(s) de test supprimee(s).', $deleted));
+
         return self::SUCCESS;
     }
 }

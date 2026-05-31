@@ -12,6 +12,7 @@ use Illuminate\Console\Command;
 class CheckProlongedOfflineCommand extends Command
 {
     protected $signature = 'support:check-prolonged-offline';
+
     protected $description = 'Crée/escalade des alertes pour les capteurs hors ligne depuis plusieurs jours (déclencheur CRM support)';
 
     public function handle(AlertService $alerts): int
@@ -27,6 +28,7 @@ class CheckProlongedOfflineCommand extends Command
         $this->scan(FeelbackDevice::query()->withoutGlobalScopes(), 'feelback', 'last_ping_at', $tiers, $alerts);
 
         $this->info('Prolonged-offline check completed.');
+
         return self::SUCCESS;
     }
 
@@ -78,8 +80,13 @@ class CheckProlongedOfflineCommand extends Command
 
     protected function severityForDays(int $days, array $tiers): string
     {
-        if ($days >= (int) ($tiers['critical'] ?? 14)) return DeviceAlert::SEVERITY_CRITICAL;
-        if ($days >= (int) ($tiers['high'] ?? 7)) return DeviceAlert::SEVERITY_HIGH;
+        if ($days >= (int) ($tiers['critical'] ?? 14)) {
+            return DeviceAlert::SEVERITY_CRITICAL;
+        }
+        if ($days >= (int) ($tiers['high'] ?? 7)) {
+            return DeviceAlert::SEVERITY_HIGH;
+        }
+
         return DeviceAlert::SEVERITY_MEDIUM;
     }
 

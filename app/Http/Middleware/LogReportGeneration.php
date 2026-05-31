@@ -35,17 +35,17 @@ class LogReportGeneration
 
         try {
             ReportAuditLog::create([
-                'user_id'     => $user->id,
-                'company_id'  => $companyId,
+                'user_id' => $user->id,
+                'company_id' => $companyId,
                 'report_type' => $reportType,
-                'route'       => substr((string) $request->route()?->uri(), 0, 150),
-                'filters'     => $filters,
-                'ip_address'  => $request->ip(),
-                'user_agent'  => substr((string) $request->userAgent(), 0, 255),
+                'route' => substr((string) $request->route()?->uri(), 0, 150),
+                'filters' => $filters,
+                'ip_address' => $request->ip(),
+                'user_agent' => substr((string) $request->userAgent(), 0, 255),
             ]);
         } catch (\Throwable $e) {
             // Le log d'audit ne doit jamais casser la requête utilisateur.
-            \Log::warning('ReportAuditLog write failed: ' . $e->getMessage());
+            \Log::warning('ReportAuditLog write failed: '.$e->getMessage());
         }
 
         return $response;

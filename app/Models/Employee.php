@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Traits\BelongsToCompany;
+use App\Traits\HasDefaultAvatar;
 use App\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Employee extends Model
 {
-    use BelongsToCompany, HasFactory, HasUuid;
+    use BelongsToCompany, HasDefaultAvatar, HasFactory, HasUuid;
 
     protected $fillable = [
         'company_id',

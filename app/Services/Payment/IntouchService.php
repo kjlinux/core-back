@@ -143,16 +143,45 @@ class IntouchService implements PaymentGatewayInterface
             return false;
         }
 
-        if ($this->webhookSecret && $rawBody !== null && $signatureHeader !== null) {
-            $expected = hash_hmac('sha256', $rawBody, $this->webhookSecret);
-            if (! hash_equals($expected, $signatureHeader)) {
-                Log::warning('InTouch callback signature mismatch');
+        // Fail-closed : la verification de signature n'est jamais optionnelle. Un
+        // callback de paiement non signe (ou que l'on ne peut pas verifier faute de
+        // secret) est refuse, car il pourrait marquer un paiement comme paye/echoue.
+        if (! $this->webhookSecret) {
+            Log::error('InTouch: INTOUCH_WEBHOOK_SECRET non configure — callback refuse (fail-closed)');
 
-                return false;
-            }
+            return false;
+        }
+
+        if ($rawBody === null || $signatureHeader === null) {
+            Log::warning('InTouch callback sans signature — refuse');
+
+            return false;
+        }
+
+        $expected = hash_hmac('sha256', $rawBody, $this->webhookSecret);
+        if (! hash_equals($expected, $signatureHeader)) {
+            Log::warning('InTouch callback signature mismatch');
+
+            return false;
         }
 
         return true;
+    }
+
+    public function confirmTransaction(?string $token): string
+    {
+        if (! $token) {
+            return 'unknown';
+        }
+
+        $response = $this->checkStatus($token);
+        $raw = $response['status'] ?? $response['response_code'] ?? null;
+
+        if ($raw === null || strtolower((string) $raw) === 'unknown') {
+            return 'unknown';
+        }
+
+        return $this->normalizeStatus((string) $raw);
     }
 
     /**

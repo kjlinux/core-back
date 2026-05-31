@@ -14,11 +14,11 @@ class GeneratePayslipsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'company_id'    => ['required', 'exists:companies,id'],
-            'site_id'       => ['nullable', 'exists:sites,id'],
+            'company_id' => ['required', 'exists:companies,id'],
+            'site_id' => ['nullable', 'exists:sites,id'],
             'department_id' => ['nullable', 'exists:departments,id'],
-            'period_start'  => ['required', 'date'],
-            'period_end'    => ['required', 'date', 'after_or_equal:period_start'],
+            'period_start' => ['required', 'date'],
+            'period_end' => ['required', 'date', 'after_or_equal:period_start'],
         ];
     }
 }

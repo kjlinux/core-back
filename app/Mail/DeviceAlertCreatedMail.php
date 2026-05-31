@@ -18,8 +18,9 @@ class DeviceAlertCreatedMail extends Mailable
     public function envelope(): Envelope
     {
         $severity = strtoupper($this->alert->severity);
+
         return new Envelope(
-            subject: "[Support IT][{$severity}] " . $this->alert->title,
+            subject: "[Support IT][{$severity}] ".$this->alert->title,
         );
     }
 

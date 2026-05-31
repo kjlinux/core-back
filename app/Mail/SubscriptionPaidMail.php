@@ -14,9 +14,7 @@ class SubscriptionPaidMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public SubscriptionPayment $payment)
-    {
-    }
+    public function __construct(public SubscriptionPayment $payment) {}
 
     public function envelope(): Envelope
     {

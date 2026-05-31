@@ -23,12 +23,15 @@ class StoreEmployeeRequest extends FormRequest
             'email' => ['required', 'email', 'unique:users,email'],
             'phone' => ['required', 'string'],
             'position' => ['required', 'string'],
-            'employee_number' => ['required', 'string', 'unique:employees'],
+            // employee_number n'est PAS accepte : le matricule est toujours genere
+            // cote serveur (MatriculeGenerator) pour garantir l'unicite par entreprise.
             'hire_date' => ['required', 'date'],
             'is_active' => ['nullable', 'boolean'],
             'avatar' => ['nullable', 'string'],
             'payment_mode' => ['nullable', 'string', 'in:monthly,hourly,daily,weekly,forfait'],
-            'base_salary' => ['nullable', 'integer', 'min:0'],
+            // base_salary obligatoire dès qu'un mode de rémunération est choisi
+            // (évite une fiche de paie à 0 silencieuse) et strictement positif.
+            'base_salary' => ['nullable', 'integer', 'min:1', 'required_with:payment_mode'],
         ];
     }
 
@@ -39,7 +42,6 @@ class StoreEmployeeRequest extends FormRequest
     {
         return [
             'email.unique' => 'Cette adresse email est déjà utilisée par un autre compte.',
-            'employee_number.unique' => 'Ce matricule est déjà attribué à un autre employé.',
         ];
     }
 }

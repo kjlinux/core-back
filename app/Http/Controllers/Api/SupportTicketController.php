@@ -18,6 +18,7 @@ class SupportTicketController extends BaseApiController
             ->where('company_id', $user->company_id)
             ->orderByDesc('created_at')
             ->get();
+
         return $this->successResponse($tickets);
     }
 
@@ -30,7 +31,7 @@ class SupportTicketController extends BaseApiController
         ]);
 
         $user = $request->user();
-        if (!$user->company_id) {
+        if (! $user->company_id) {
             return $this->errorResponse('Utilisateur sans compagnie', 422);
         }
 
@@ -50,13 +51,26 @@ class SupportTicketController extends BaseApiController
 
     public function supportIndex(Request $request): JsonResponse
     {
+        $perPage = max(1, (int) $request->input('per_page', 15));
+
         $q = SupportTicket::query()->with(['company:id,name,phone,email', 'createdBy:id,first_name,last_name,email,phone']);
 
-        if ($s = $request->input('status')) $q->where('status', $s);
-        if ($p = $request->input('priority')) $q->where('priority', $p);
-        if ($c = $request->input('company_id')) $q->where('company_id', $c);
+        if ($s = $request->input('status')) {
+            $q->where('status', $s);
+        }
+        if ($p = $request->input('priority')) {
+            $q->where('priority', $p);
+        }
+        if ($c = $request->input('company_id')) {
+            $q->where('company_id', $c);
+        }
+        if ($search = trim((string) $request->input('search', ''))) {
+            $q->where('subject', 'like', '%'.$search.'%');
+        }
 
-        $tickets = $q->orderByDesc('created_at')->get()->map(fn (SupportTicket $t) => [
+        $paginator = $q->orderByDesc('created_at')->paginate($perPage);
+
+        $data = collect($paginator->items())->map(fn (SupportTicket $t) => [
             'id' => $t->id,
             'subject' => $t->subject,
             'message' => $t->message,
@@ -73,19 +87,29 @@ class SupportTicketController extends BaseApiController
             ] : null,
             'createdBy' => $t->createdBy ? [
                 'id' => $t->createdBy->id,
-                'name' => trim(($t->createdBy->first_name ?? '') . ' ' . ($t->createdBy->last_name ?? '')) ?: $t->createdBy->email,
+                'name' => trim(($t->createdBy->first_name ?? '').' '.($t->createdBy->last_name ?? '')) ?: $t->createdBy->email,
                 'email' => $t->createdBy->email,
                 'phone' => $t->createdBy->phone,
             ] : null,
         ]);
 
-        return $this->successResponse($tickets);
+        return response()->json([
+            'data' => $data->values(),
+            'meta' => [
+                'currentPage' => $paginator->currentPage(),
+                'perPage' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'totalPages' => $paginator->lastPage(),
+            ],
+        ]);
     }
 
     public function supportUpdate(Request $request, string $id): JsonResponse
     {
         $ticket = SupportTicket::find($id);
-        if (!$ticket) return $this->errorResponse('Ticket introuvable', 404);
+        if (! $ticket) {
+            return $this->errorResponse('Ticket introuvable', 404);
+        }
 
         $data = $request->validate([
             'status' => 'nullable|in:open,in_progress,resolved',

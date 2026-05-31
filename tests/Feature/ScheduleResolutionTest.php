@@ -40,6 +40,7 @@ beforeEach(function () {
         $t->uuid('schedule_id')->nullable();
         $t->string('first_name')->nullable();
         $t->string('last_name')->nullable();
+        $t->string('avatar')->nullable();
         $t->timestamps();
     });
 

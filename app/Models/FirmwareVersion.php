@@ -26,9 +26,9 @@ class FirmwareVersion extends Model
 
     protected $casts = [
         'is_auto_update' => 'boolean',
-        'is_published'   => 'boolean',
-        'file_size'      => 'integer',
-        'published_at'   => 'datetime',
+        'is_published' => 'boolean',
+        'file_size' => 'integer',
+        'published_at' => 'datetime',
     ];
 
     public function uploader(): BelongsTo

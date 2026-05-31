@@ -39,7 +39,7 @@ class FeelbackDeviceController extends BaseApiController
             });
         });
 
-        $devices = $query->paginate((int) $request->input('per_page', 15));
+        $devices = $query->orderByDesc('created_at')->paginate((int) $request->input('per_page', 15));
 
         return $this->paginatedResponse(FeelbackDeviceResource::collection($devices));
     }

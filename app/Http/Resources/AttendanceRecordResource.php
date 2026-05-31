@@ -20,7 +20,7 @@ class AttendanceRecordResource extends JsonResource
             'id' => (string) $this->id,
             'employeeId' => (string) $this->employee_id,
             'employeeName' => $employee
-                ? $employee->first_name . ' ' . $employee->last_name
+                ? $employee->first_name.' '.$employee->last_name
                 : null,
             'department' => $employee && $employee->relationLoaded('department') && $employee->department
                 ? $employee->department->name

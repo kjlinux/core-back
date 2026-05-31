@@ -6,9 +6,13 @@ use App\Http\Requests\Employee\StoreEmployeeRequest;
 use App\Http\Requests\Employee\UpdateEmployeeRequest;
 use App\Http\Resources\EmployeeResource;
 use App\Mail\EmployeeCreatedMail;
+use App\Models\Company;
 use App\Models\Employee;
 use App\Models\TechnicienActivityLog;
 use App\Models\User;
+use App\Services\EmployeeNotificationService;
+use App\Support\MatriculeGenerator;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +22,8 @@ use Illuminate\Support\Str;
 
 class EmployeeController extends BaseApiController
 {
+    public function __construct(private EmployeeNotificationService $employeeNotifications) {}
+
     /**
      * Get paginated list of employees with filters and search.
      */
@@ -49,7 +55,7 @@ class EmployeeController extends BaseApiController
         });
 
         $perPage = $request->input('per_page', 15);
-        $employees = $query->paginate($perPage);
+        $employees = $query->orderByDesc('created_at')->paginate($perPage);
 
         return $this->paginatedResponse(EmployeeResource::collection($employees));
     }
@@ -82,25 +88,9 @@ class EmployeeController extends BaseApiController
     {
         $data = $this->enforceCompanyId($request->validated());
         $plainPassword = Str::random(12);
+        $company = Company::findOrFail($data['company_id']);
 
-        [$employee, $user] = DB::transaction(function () use ($data, $plainPassword) {
-            $employee = Employee::create($data);
-
-            $user = User::create([
-                'name' => $employee->first_name.' '.$employee->last_name,
-                'first_name' => $employee->first_name,
-                'last_name' => $employee->last_name,
-                'email' => $employee->email,
-                'phone' => $employee->phone,
-                'password' => Hash::make($plainPassword),
-                'role' => 'employe',
-                'company_id' => $employee->company_id,
-                'employee_id' => $employee->id,
-                'is_active' => true,
-            ]);
-
-            return [$employee, $user];
-        });
+        [$employee, $user] = $this->createEmployeeWithUniqueMatricule($data, $company, $plainPassword);
 
         try {
             Mail::to($employee->email)->send(new EmployeeCreatedMail($employee, $user, $plainPassword));
@@ -108,9 +98,61 @@ class EmployeeController extends BaseApiController
             \Log::error('EmployeeCreatedMail failed for employee '.$employee->id.': '.$e->getMessage());
         }
 
+        // Notification de bienvenue in-app (l'email d'identifiants est déjà envoyé ci-dessus).
+        $employee->setRelation('user', $user);
+        $this->employeeNotifications->notifyEmployee(
+            $employee,
+            'account',
+            'Bienvenue sur TangaFlow',
+            'Votre espace personnel est désormais actif. Consultez vos présences, vos fiches de paie et soumettez vos justificatifs d\'absence.',
+            ['employeeId' => (string) $employee->id],
+        );
+
         TechnicienActivityLog::record('create', 'employee', (string) $employee->id, $employee->full_name);
 
         return $this->resourceResponse(new EmployeeResource($employee), 'Employé créé avec succès', 201);
+    }
+
+    /**
+     * Cree l'employe et son compte utilisateur lie, en attribuant un matricule
+     * genere cote serveur (jamais celui fourni par le client). En cas de collision
+     * concurrente sur le matricule, on regenere et on reessaie avant d'abandonner.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{0: Employee, 1: User}
+     */
+    private function createEmployeeWithUniqueMatricule(array $data, Company $company, string $plainPassword): array
+    {
+        $maxAttempts = 5;
+
+        for ($attempt = 1; ; $attempt++) {
+            try {
+                return DB::transaction(function () use ($data, $company, $plainPassword) {
+                    $data['employee_number'] = MatriculeGenerator::forCompany($company);
+
+                    $employee = Employee::create($data);
+
+                    $user = User::create([
+                        'name' => $employee->first_name.' '.$employee->last_name,
+                        'first_name' => $employee->first_name,
+                        'last_name' => $employee->last_name,
+                        'email' => $employee->email,
+                        'phone' => $employee->phone,
+                        'password' => Hash::make($plainPassword),
+                        'role' => 'employe',
+                        'company_id' => $employee->company_id,
+                        'employee_id' => $employee->id,
+                        'is_active' => true,
+                    ]);
+
+                    return [$employee, $user];
+                });
+            } catch (UniqueConstraintViolationException $e) {
+                if ($attempt >= $maxAttempts) {
+                    throw $e;
+                }
+            }
+        }
     }
 
     /**

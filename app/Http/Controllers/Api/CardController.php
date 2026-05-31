@@ -8,6 +8,7 @@ use App\Http\Requests\Card\StoreCardRequest;
 use App\Http\Resources\CardHistoryResource;
 use App\Http\Resources\RfidCardResource;
 use App\Models\CardHistory;
+use App\Models\Employee;
 use App\Models\RfidCard;
 use App\Models\TechnicienActivityLog;
 use Illuminate\Http\JsonResponse;
@@ -79,6 +80,15 @@ class CardController extends BaseApiController
     public function assign(AssignCardRequest $request, string $id): JsonResponse
     {
         $card = RfidCard::findOrFail($id);
+
+        // Cloisonnement multi-tenant : la carte et l'employe doivent appartenir a la meme
+        // entreprise. Indispensable pour les roles globaux (super_admin / support_it) dont
+        // le findOrFail n'est pas cloisonne — sinon un pointage finirait dans la mauvaise
+        // entreprise (cf. garde-fou cote MqttListenRfidCommand).
+        $employee = Employee::findOrFail($request->input('employee_id'));
+        if ((string) $employee->company_id !== (string) $card->company_id) {
+            return $this->errorResponse('La carte et l\'employé doivent appartenir à la même entreprise.', 422);
+        }
 
         $card->update([
             'employee_id' => $request->input('employee_id'),

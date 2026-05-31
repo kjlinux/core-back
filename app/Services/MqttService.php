@@ -11,7 +11,7 @@ class MqttService
     {
         $host = config('mqtt.host');
         $port = (int) config('mqtt.port', 8883);
-        $clientId = $clientId ?? config('mqtt.client_id') . '-' . uniqid();
+        $clientId = $clientId ?? config('mqtt.client_id').'-'.uniqid();
 
         $mqtt = new MqttClient($host, $port, $clientId, MqttClient::MQTT_3_1_1);
 
@@ -58,6 +58,7 @@ class MqttService
     public function extractUniqueId(string $topic): ?string
     {
         $parts = explode('/', $topic);
+
         return $parts[3] ?? null;
     }
 }

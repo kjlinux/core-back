@@ -18,13 +18,13 @@ class FirmwareVersionResource extends JsonResource
             'fileUrl' => $this->file_path ? Storage::disk('public')->url($this->file_path) : null,
             'fileSize' => $this->file_size,
             'isAutoUpdate' => $this->is_auto_update,
-            'isPublished'  => $this->is_published,
-            'publishedAt'  => $this->published_at?->toISOString(),
-            'uploadedAt'   => $this->created_at?->toISOString(),
+            'isPublished' => $this->is_published,
+            'publishedAt' => $this->published_at?->toISOString(),
+            'uploadedAt' => $this->created_at?->toISOString(),
             'uploadedBy' => $this->when(
                 $this->relationLoaded('uploader'),
-                fn() => $this->uploader
-                    ? $this->uploader->first_name . ' ' . $this->uploader->last_name
+                fn () => $this->uploader
+                    ? $this->uploader->first_name.' '.$this->uploader->last_name
                     : null
             ),
         ];

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Jobs\SendScheduledReport;
 use App\Models\ReportSchedule;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -59,6 +60,27 @@ class ReportScheduleController extends BaseApiController
         $schedule->delete();
 
         return $this->noContentResponse();
+    }
+
+    /**
+     * Déclenche un envoi immédiat (test). Exécuté de façon synchrone pour
+     * renvoyer le résultat réel : le job enregistre last_status/last_error,
+     * que l'on relit après exécution.
+     */
+    public function sendNow(string $id): JsonResponse
+    {
+        $query = ReportSchedule::whereKey($id);
+        $this->scopeByCompany($query);
+        $schedule = $query->firstOrFail();
+
+        SendScheduledReport::dispatchSync($schedule->id);
+        $schedule->refresh();
+
+        if ($schedule->last_status === 'failed') {
+            return $this->errorResponse($schedule->last_error ?: "Échec de l'envoi du rapport", 422);
+        }
+
+        return $this->successResponse($schedule, 'Rapport envoyé');
     }
 
     private function validatePayload(Request $request, bool $partial = false): array

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\Department;
 use App\Models\FeelbackEntry;
 use App\Models\Site;
 use App\Support\CsvExporter;
@@ -20,16 +19,16 @@ class FeelbackReportController extends BaseApiController
         $payload = $this->buildPayload($request);
 
         $type = $request->input('type', 'global');
+        // Pas de vue « par département » : feelback_entries n'est rattaché qu'au
+        // site (ni département ni employé), une répartition serait inventée.
         $headers = match ($type) {
             'site' => ['Site ID', 'Site', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
-            'department' => ['Dept ID', 'Département', 'Site', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
             'period' => ['Période', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
             default => ['Total réponses', 'Bon (%)', 'Neutre (%)', 'Mauvais (%)'],
         };
 
         $rows = match ($type) {
             'site' => array_map(fn ($r) => [$r['siteId'], $r['site'], $r['totalResponses'], $r['bon'], $r['neutre'], $r['mauvais'], $r['satisfactionRate']], $payload['bySite']),
-            'department' => array_map(fn ($r) => [$r['departmentId'], $r['department'], $r['site'], $r['totalResponses'], $r['bon'], $r['neutre'], $r['mauvais'], $r['satisfactionRate']], $payload['byDepartment']),
             'period' => array_map(fn ($r) => [$r['period'], $r['totalResponses'], $r['bon'], $r['neutre'], $r['mauvais'], $r['satisfactionRate']], $payload['byPeriod']),
             default => [[$payload['totalResponses'], $payload['bonRate'], $payload['neutreRate'], $payload['mauvaisRate']]],
         };
@@ -53,10 +52,6 @@ class FeelbackReportController extends BaseApiController
             'site' => [
                 ['Site', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
                 array_map(fn ($r) => [$r['site'], $r['totalResponses'], $r['bon'], $r['neutre'], $r['mauvais'], $r['satisfactionRate']], $payload['bySite']),
-            ],
-            'department' => [
-                ['Département', 'Site', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
-                array_map(fn ($r) => [$r['department'], $r['site'], $r['totalResponses'], $r['bon'], $r['neutre'], $r['mauvais'], $r['satisfactionRate']], $payload['byDepartment']),
             ],
             'period' => [
                 ['Période', 'Total', 'Bon', 'Neutre', 'Mauvais', 'Satisfaction (%)'],
@@ -183,38 +178,9 @@ class FeelbackReportController extends BaseApiController
             'satisfactionRate' => $r->total > 0 ? round($r->bon / $r->total * 100, 1) : 0,
         ])->values()->toArray();
 
-        // ── By department ─────────────────────────────────────────────────────
-        // feelback_entries n'est lié qu'au site (pas de département / employé).
-        // Pour éviter que chaque département d'un même site hérite du TOTAL du site
-        // (ce qui fausse les sommes et double-compte), on répartit proportionnellement
-        // les compteurs du site entre ses départements (parts égales).
-        $siteStatsBySiteId = $siteRows->keyBy('site_id');
-        $siteNamesById = $sitesById;
-
-        $departments = Department::whereIn('site_id', $siteRows->pluck('site_id'))
-            ->get(['id', 'name', 'site_id']);
-
-        $deptCountBySite = $departments->groupBy('site_id')->map->count();
-
-        $byDepartment = $departments->map(function ($dept) use ($siteStatsBySiteId, $siteNamesById, $deptCountBySite) {
-            $stats = $siteStatsBySiteId[$dept->site_id] ?? null;
-            $share = max(1, (int) ($deptCountBySite[$dept->site_id] ?? 1));
-            $total = $stats ? (int) round(((int) $stats->total) / $share) : 0;
-            $bon = $stats ? (int) round(((int) $stats->bon) / $share) : 0;
-            $neutre = $stats ? (int) round(((int) $stats->neutre) / $share) : 0;
-            $mauvais = $stats ? (int) round(((int) $stats->mauvais) / $share) : 0;
-
-            return [
-                'departmentId' => (string) $dept->id,
-                'department' => $dept->name,
-                'site' => $siteNamesById[$dept->site_id] ?? '-',
-                'totalResponses' => $total,
-                'bon' => $bon,
-                'neutre' => $neutre,
-                'mauvais' => $mauvais,
-                'satisfactionRate' => $total > 0 ? round($bon / $total * 100, 1) : 0,
-            ];
-        })->values()->toArray();
+        // Pas de vue « par département » : le feedback n'est rattaché qu'au site
+        // (feelback_entries n'a ni department_id ni employee_id). Toute répartition
+        // par département serait inventée — on s'en tient donc aux sites.
 
         // ── By period (1 query, PostgreSQL DATE_TRUNC) ───────────────────────
         // Use explicit GROUP BY/ORDER BY expressions to avoid positional ambiguity on PostgreSQL
@@ -260,7 +226,6 @@ class FeelbackReportController extends BaseApiController
             'neutreRate' => $neutreRate,
             'mauvaisRate' => $mauvaisRate,
             'bySite' => $bySite,
-            'byDepartment' => $byDepartment,
             'byPeriod' => $byPeriod,
         ];
     }

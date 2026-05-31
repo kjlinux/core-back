@@ -65,4 +65,35 @@ class MqttController extends BaseApiController
             return $this->errorResponse('Echec d\'envoi de la commande: '.$e->getMessage(), 500);
         }
     }
+
+    /**
+     * Déclenche le mode scan d'un capteur RFID pour enregistrer une nouvelle carte.
+     * Endpoint dédié (commande SCAN uniquement) ouvert aux rôles qui gèrent les cartes,
+     * contrairement à sendCommand() réservé au super_admin pour les commandes lourdes.
+     * Le scope global BelongsToCompany garantit qu'un admin ne vise que ses propres capteurs.
+     */
+    public function scanCard(string $id, MqttService $mqtt): JsonResponse
+    {
+        $device = RfidDevice::findOrFail($id);
+
+        $commandCode = config('mqtt.command_codes.rfid.SCAN');
+
+        if (! empty($device->mqtt_topic)) {
+            $responseTopic = $mqtt->getResponseTopic($device->mqtt_topic);
+        } else {
+            $prefix = config('mqtt.topics.rfid');
+            $responseTopic = "{$prefix}/{$device->serial_number}/response";
+        }
+
+        try {
+            $mqtt->publish($responseTopic, $commandCode);
+
+            return $this->successResponse([
+                'topic' => $responseTopic,
+                'command' => $commandCode,
+            ], 'Mode scan déclenché avec succès');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Echec du déclenchement du scan: '.$e->getMessage(), 500);
+        }
+    }
 }

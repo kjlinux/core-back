@@ -18,7 +18,7 @@ class AlertService
             ->where('device_kind', $attributes['device_kind'])
             ->where('type', $attributes['type'])
             ->when(
-                !empty($attributes['device_id']),
+                ! empty($attributes['device_id']),
                 fn ($q) => $q->where('device_id', $attributes['device_id']),
                 fn ($q) => $q->whereNull('device_id'),
             )
@@ -50,6 +50,7 @@ class AlertService
             'resolved_at' => now(),
         ]);
         $this->safeBroadcast(fn () => event(new DeviceAlertResolved($alert)));
+
         return $alert;
     }
 
@@ -58,7 +59,7 @@ class AlertService
         try {
             $fn();
         } catch (\Throwable $e) {
-            Log::warning('[AlertService] broadcast échoué (serveur temps réel injoignable ?): ' . $e->getMessage());
+            Log::warning('[AlertService] broadcast échoué (serveur temps réel injoignable ?): '.$e->getMessage());
         }
     }
 
@@ -90,7 +91,7 @@ class AlertService
             Mail::to($recipients)->queue(new DeviceAlertCreatedMail($alert));
             $alert->update(['notified_at' => now()]);
         } catch (\Throwable $e) {
-            Log::error('[AlertService] notify support failed: ' . $e->getMessage(), [
+            Log::error('[AlertService] notify support failed: '.$e->getMessage(), [
                 'alert_id' => $alert->id,
             ]);
         }

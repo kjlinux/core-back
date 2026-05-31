@@ -14,12 +14,12 @@ class SaveLatenessRulesRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'rules'                      => ['required', 'array'],
-            'rules.*.tolerance_minutes'  => ['required', 'integer', 'min:0'],
-            'rules.*.minutes_threshold'  => ['required', 'integer', 'min:1'],
-            'rules.*.penalty_value'      => ['required', 'numeric', 'min:0'],
-            'rules.*.penalty_type'       => ['required', 'string', 'in:fixed,percentage'],
-            'rules.*.apply_per'          => ['required', 'string', 'in:occurrence,tranche'],
+            'rules' => ['required', 'array'],
+            'rules.*.tolerance_minutes' => ['required', 'integer', 'min:0'],
+            'rules.*.minutes_threshold' => ['required', 'integer', 'min:1'],
+            'rules.*.penalty_value' => ['required', 'numeric', 'min:0'],
+            'rules.*.penalty_type' => ['required', 'string', 'in:fixed,percentage'],
+            'rules.*.apply_per' => ['required', 'string', 'in:occurrence,tranche'],
         ];
     }
 }

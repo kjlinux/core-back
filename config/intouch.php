@@ -9,10 +9,10 @@ return [
     'service_code' => env('INTOUCH_SERVICE_CODE', 'CASHIN'),
     'webhook_secret' => env('INTOUCH_WEBHOOK_SECRET'),
     'callback_url' => env('INTOUCH_CALLBACK_URL')
-        ?: rtrim((string) env('APP_URL', ''), '/') . '/api/payment/intouch/callback',
+        ?: rtrim((string) env('APP_URL', ''), '/').'/api/payment/intouch/callback',
     'return_url' => env('INTOUCH_RETURN_URL')
-        ?: rtrim((string) env('APP_FRONTEND_URL', ''), '/') . '/marketplace/payment/callback',
+        ?: rtrim((string) env('APP_FRONTEND_URL', ''), '/').'/marketplace/payment/callback',
     'cancel_url' => env('INTOUCH_CANCEL_URL')
-        ?: rtrim((string) env('APP_FRONTEND_URL', ''), '/') . '/marketplace/payment/callback?status=cancelled',
+        ?: rtrim((string) env('APP_FRONTEND_URL', ''), '/').'/marketplace/payment/callback?status=cancelled',
     'currency' => 'XOF',
 ];

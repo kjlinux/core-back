@@ -38,7 +38,7 @@ class BiometricDeviceController extends BaseApiController
 
         $perPage = (int) $request->input('per_page', 15);
 
-        return $this->paginatedResponse(BiometricDeviceResource::collection($query->paginate($perPage)));
+        return $this->paginatedResponse(BiometricDeviceResource::collection($query->orderByDesc('created_at')->paginate($perPage)));
     }
 
     public function show(string $id): JsonResponse

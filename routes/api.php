@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AdminOrderController;
 use App\Http\Controllers\Api\AdminSalesReportController;
+use App\Http\Controllers\Api\AdvancedAnalyticsController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AttendanceReportController;
 use App\Http\Controllers\Api\AuthController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\Api\FeelbackStatsController;
 use App\Http\Controllers\Api\FirmwareController;
 use App\Http\Controllers\Api\ForgotPasswordController;
 use App\Http\Controllers\Api\HolidayController;
+use App\Http\Controllers\Api\MenuBadgeController;
 use App\Http\Controllers\Api\MqttController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
@@ -97,6 +99,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('subscriptions')->group(function () {
         Route::get('/me', [\App\Http\Controllers\Api\SubscriptionController::class, 'me']);
         Route::get('/history', [\App\Http\Controllers\Api\SubscriptionController::class, 'history']);
+        Route::get('/events', [\App\Http\Controllers\Api\SubscriptionController::class, 'events']);
+        Route::get('/quote', [\App\Http\Controllers\Api\SubscriptionController::class, 'quote']);
         Route::post('/subscribe', [\App\Http\Controllers\Api\SubscriptionController::class, 'subscribe']);
         Route::post('/upgrade', [\App\Http\Controllers\Api\SubscriptionController::class, 'upgrade']);
         Route::post('/pay-next-period', [\App\Http\Controllers\Api\SubscriptionController::class, 'payNextPeriod']);
@@ -138,7 +142,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:super_admin,technicien')->group(function () {
         // Companies CUD
         Route::post('/companies', [CompanyController::class, 'store']);
-        Route::put('/companies/{id}', [CompanyController::class, 'update']);
         Route::patch('/companies/{id}/toggle-active', [CompanyController::class, 'toggleActive']);
 
         // Garantie materielle (deverrouille les plans garantie/premium pour l'entreprise)
@@ -146,6 +149,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/companies/{id}/warranty', [CompanyController::class, 'stopWarranty']);
 
     });
+
+    // Mise a jour entreprise : l'admin_enterprise peut modifier sa propre entreprise.
+    // Le scope (entreprise propre) et le verrouillage du champ subscription sont geres
+    // dans CompanyController::update().
+    Route::middleware('role:super_admin,admin_enterprise,technicien')
+        ->put('/companies/{id}', [CompanyController::class, 'update']);
 
     // =============================================
     // Super Admin uniquement
@@ -159,9 +168,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Admin orders + reports
         Route::get('/admin/orders', [AdminOrderController::class, 'index']);
-        Route::middleware(['plan:garantie,premium', 'log.report:sales'])->get('/admin/reports/sales', [AdminSalesReportController::class, 'index']);
-        Route::middleware(['plan:garantie,premium', 'log.report:sales-csv'])->get('/admin/reports/sales/export.csv', [AdminSalesReportController::class, 'exportCsv']);
-        Route::middleware(['plan:garantie,premium', 'log.report:sales-pdf'])->get('/admin/reports/sales/export.pdf', [AdminSalesReportController::class, 'exportPdf']);
+        // Rapports de ventes internes (marketplace TANGA) : super_admin uniquement, pas de gating par plan.
+        Route::middleware('log.report:sales')->get('/admin/reports/sales', [AdminSalesReportController::class, 'index']);
+        Route::middleware('log.report:sales-csv')->get('/admin/reports/sales/export.csv', [AdminSalesReportController::class, 'exportCsv']);
+        Route::middleware('log.report:sales-pdf')->get('/admin/reports/sales/export.pdf', [AdminSalesReportController::class, 'exportPdf']);
 
         // MQTT
         Route::post('/mqtt/test', [MqttController::class, 'testConnection']);
@@ -195,6 +205,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/rfid/devices', [RfidDeviceController::class, 'store']);
         Route::put('/rfid/devices/{id}', [RfidDeviceController::class, 'update']);
         Route::delete('/rfid/devices/{id}', [RfidDeviceController::class, 'destroy']);
+
+        // RFID : déclenchement du mode scan pour enregistrer une carte (commande SCAN seule)
+        Route::post('/rfid/devices/{id}/scan', [MqttController::class, 'scanCard']);
 
         // Cards management
         Route::post('/cards', [CardController::class, 'store']);
@@ -377,10 +390,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/firmware/logs', [FirmwareController::class, 'logs']);
 
         // Mise à jour en masse + progression (admin_enterprise, technicien, super_admin)
-        Route::middleware('plan:garantie,premium')->post('/firmware/trigger-company-update', [FirmwareController::class, 'triggerCompanyUpdate']);
+        Route::middleware('feature:firmware_updates')->post('/firmware/trigger-company-update', [FirmwareController::class, 'triggerCompanyUpdate']);
         Route::get('/firmware/company-update-progress', [FirmwareController::class, 'companyUpdateProgress']);
-        Route::middleware('plan:garantie,premium')->post('/firmware/retry-failed', [FirmwareController::class, 'retryFailed']);
-        Route::middleware('plan:garantie,premium')->post('/firmware/retry-pending', [FirmwareController::class, 'retryPending']);
+        Route::middleware('feature:firmware_updates')->post('/firmware/retry-failed', [FirmwareController::class, 'retryFailed']);
+        Route::middleware('feature:firmware_updates')->post('/firmware/retry-pending', [FirmwareController::class, 'retryPending']);
 
         // Ecriture : super_admin + technicien seulement
         Route::middleware('role:super_admin,technicien')->group(function () {
@@ -401,16 +414,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/trends', [DashboardController::class, 'trends']);
     Route::get('/dashboard/charts', [DashboardController::class, 'charts']);
 
-    // Audit log des rapports — accessible aux admins (scoped par company).
-    Route::middleware('role:super_admin,admin_enterprise')
+    // Analytics avances — fonctionnalite Premium (feature advanced_analytics).
+    Route::middleware(['role:super_admin,admin_enterprise,manager', 'feature:advanced_analytics'])
+        ->get('/analytics/advanced', [AdvancedAnalyticsController::class, 'index']);
+
+    // Audit log des rapports — accessible aux admins (scoped par company). Feature payante (RH automatises).
+    Route::middleware(['role:super_admin,admin_enterprise', 'feature:hr_reports'])
         ->get('/reports/audit-log', [\App\Http\Controllers\Api\ReportAuditLogController::class, 'index']);
 
-    // Planification d'envoi automatique de rapports — admins.
-    Route::middleware('role:super_admin,admin_enterprise')->group(function () {
+    // Planification d'envoi automatique de rapports — admins. Feature payante (RH automatises).
+    Route::middleware(['role:super_admin,admin_enterprise', 'feature:hr_reports'])->group(function () {
         Route::get('/reports/schedules', [\App\Http\Controllers\Api\ReportScheduleController::class, 'index']);
         Route::post('/reports/schedules', [\App\Http\Controllers\Api\ReportScheduleController::class, 'store']);
         Route::patch('/reports/schedules/{id}', [\App\Http\Controllers\Api\ReportScheduleController::class, 'update']);
         Route::delete('/reports/schedules/{id}', [\App\Http\Controllers\Api\ReportScheduleController::class, 'destroy']);
+        Route::post('/reports/schedules/{id}/send', [\App\Http\Controllers\Api\ReportScheduleController::class, 'sendNow']);
     });
 
     // Signature numerique des rapports techniciens.
@@ -435,10 +453,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::patch('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
 
+    // Badges "attention" du menu (compteurs par role + scoping entreprise)
+    Route::get('/menu-badges', [MenuBadgeController::class, 'index']);
+    Route::post('/menu-badges/seen', [MenuBadgeController::class, 'seen']);
+
     // =============================================
-    // Paie (super_admin + admin_enterprise) — necessite plan Garantie ou Premium
+    // Paie (super_admin + admin_enterprise) — necessite la feature payroll (plans Garantie/Premium)
     // =============================================
-    Route::middleware(['role:super_admin,admin_enterprise', 'plan:garantie,premium'])->group(function () {
+    Route::middleware(['role:super_admin,admin_enterprise', 'feature:payroll'])->group(function () {
         // Configuration
         Route::get('/payroll/config/{companyId}', [PayrollController::class, 'getConfig']);
         Route::put('/payroll/config/{companyId}', [PayrollController::class, 'saveConfig']);
@@ -469,7 +491,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/devices/{kind}/{id}/command', [SupportController::class, 'sendCommand']);
         Route::get('/companies', [SupportController::class, 'companies']);
         Route::get('/companies/{id}', [SupportController::class, 'companyDetail']);
+        Route::post('/companies/{id}/impersonate', [SupportController::class, 'impersonateCompany']);
         Route::post('/users/{id}/reset-password', [SupportController::class, 'resetUserPassword']);
+        Route::post('/users/{id}/impersonate', [SupportController::class, 'impersonateUser']);
         Route::get('/witnesses', [SupportController::class, 'listWitnesses']);
         Route::post('/witnesses/{kind}/{id}', [SupportController::class, 'markWitness']);
         Route::delete('/witnesses/{kind}/{id}', [SupportController::class, 'unmarkWitness']);
@@ -485,6 +509,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // =============================================
     Route::middleware('role:admin_enterprise,manager')->prefix('client')->group(function () {
         Route::get('/tickets', [SupportTicketController::class, 'clientIndex']);
-        Route::post('/tickets', [SupportTicketController::class, 'clientStore']);
+        // Ouverture de plainte reservee aux plans incluant le SAV (Garantie/Premium).
+        Route::middleware('feature:sav_included')->post('/tickets', [SupportTicketController::class, 'clientStore']);
     });
 });

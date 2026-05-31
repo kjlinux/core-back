@@ -66,9 +66,11 @@ class AttendanceReportController extends BaseApiController
 
         $summary = [
             ['label' => 'Employés', 'value' => $report['totalEmployees']],
+            ['label' => 'Jours attendus', 'value' => $report['totalExpected']],
             ['label' => 'Présents', 'value' => $report['totalPresent']],
             ['label' => 'Absents', 'value' => $report['totalAbsent']],
             ['label' => 'Retards', 'value' => $report['totalLate']],
+            ['label' => 'Taux global', 'value' => $report['globalRate'].' %'],
         ];
 
         $subtitle = sprintf('Du %s au %s', $request->input('start_date'), $request->input('end_date'));

@@ -20,7 +20,7 @@ class FingerprintEnrollmentResource extends JsonResource
             'employeeName' => $this->when(
                 $this->relationLoaded('employee'),
                 fn () => $this->employee
-                    ? $this->employee->first_name . ' ' . $this->employee->last_name
+                    ? $this->employee->first_name.' '.$this->employee->last_name
                     : null
             ),
             'deviceId' => (string) $this->device_id,

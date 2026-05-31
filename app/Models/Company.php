@@ -72,6 +72,38 @@ class Company extends Model
     }
 
     /**
+     * Indique si le plan effectif de la compagnie inclut la fonctionnalite donnee.
+     *
+     * Un plan paye expire retombe sur les fonctionnalites du plan freemium :
+     * l'acces aux features payantes suit l'etat reel de l'abonnement, pas juste le code stocke.
+     */
+    public function hasFeature(string $feature): bool
+    {
+        $code = $this->subscription;
+
+        // Plan paye mais abonnement inactif (expire) -> on degrade vers freemium.
+        if ($code !== SubscriptionPlan::FREEMIUM && ! $this->isSubscriptionActive()) {
+            $code = SubscriptionPlan::FREEMIUM;
+        }
+
+        return $this->resolvePlan($code)?->hasFeature($feature) ?? false;
+    }
+
+    /**
+     * Resout (et memoise par requete) le SubscriptionPlan correspondant a un code.
+     */
+    protected function resolvePlan(string $code): ?SubscriptionPlan
+    {
+        static $cache = [];
+
+        if (! array_key_exists($code, $cache)) {
+            $cache[$code] = SubscriptionPlan::where('code', $code)->first();
+        }
+
+        return $cache[$code];
+    }
+
+    /**
      * Administrateur principal de l'entreprise (premier compte admin_enterprise).
      */
     public function admin(): HasOne

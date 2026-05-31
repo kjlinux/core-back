@@ -11,8 +11,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class CsvExporter
 {
     /**
-     * @param iterable<int,array<int,string|int|float|null>> $rows
-     * @param array<int,string> $headers
+     * @param  iterable<int,array<int,string|int|float|null>>  $rows
+     * @param  array<int,string>  $headers
      */
     public static function stream(string $filename, array $headers, iterable $rows): StreamedResponse
     {
@@ -28,10 +28,10 @@ class CsvExporter
             }
             fclose($out);
         }, 200, [
-            'Content-Type'              => 'text/csv; charset=UTF-8',
-            'Content-Disposition'       => "attachment; filename=\"{$safeName}\"",
-            'X-Content-Type-Options'    => 'nosniff',
-            'Cache-Control'             => 'no-store, max-age=0',
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$safeName}\"",
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'no-store, max-age=0',
         ]);
     }
 }

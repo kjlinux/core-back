@@ -8,16 +8,23 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ClientFollowupCall extends Model
 {
     public const TYPE_J2 = 'j2';
+
     public const TYPE_J7 = 'j7';
+
     public const TYPE_J30 = 'j30';
 
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_DONE = 'done';
+
     public const STATUS_SKIPPED = 'skipped';
+
     public const STATUS_ESCALATED = 'escalated';
 
     public const RESULT_OK = 'ok';
+
     public const RESULT_PARTIAL = 'partial';
+
     public const RESULT_PROBLEM = 'problem';
 
     protected $fillable = [

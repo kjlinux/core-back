@@ -33,7 +33,7 @@ class RfidDeviceController extends BaseApiController
             });
         });
 
-        $devices = $query->paginate((int) $request->input('per_page', 15));
+        $devices = $query->orderByDesc('created_at')->paginate((int) $request->input('per_page', 15));
 
         return $this->paginatedResponse(RfidDeviceResource::collection($devices));
     }

@@ -2,14 +2,14 @@
 
 namespace App\Models;
 
-use App\Traits\HasUuid;
 use App\Traits\BelongsToCompany;
+use App\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class RfidDevice extends Model
 {
-    use HasUuid, BelongsToCompany;
+    use BelongsToCompany, HasUuid;
 
     protected $fillable = [
         'serial_number',

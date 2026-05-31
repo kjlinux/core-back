@@ -145,10 +145,11 @@ class LigdiCashService implements PaymentGatewayInterface
     }
 
     /**
-     * Verifie la coherence minimale du payload de callback.
-     * Si une signature HMAC est configuree (ligdicash.hmac_header / ligdicash.api_secret),
-     * elle est verifiee contre le corps brut. Sinon on retombe sur la verification
-     * de presence des champs critiques.
+     * Verifie l'authenticite du payload de callback.
+     * Fail-closed : la signature HMAC (sur le corps brut, cle = api_secret) est
+     * obligatoire. Sans secret configure ou sans signature dans la requete, le
+     * callback est refuse — on ne fait jamais confiance a un callback non verifie,
+     * qui pourrait marquer un paiement comme paye/echoue.
      *
      * @param  array<string,mixed>  $data
      */
@@ -158,18 +159,44 @@ class LigdiCashService implements PaymentGatewayInterface
             return false;
         }
 
-        if ($rawBody !== null && $signatureHeader !== null && $this->apiSecret !== '') {
-            $expected = hash_hmac('sha256', $rawBody, $this->apiSecret);
-            if (! hash_equals($expected, $signatureHeader)) {
-                Log::warning('LigdiCash callback signature mismatch', [
-                    'expected_prefix' => substr($expected, 0, 8),
-                ]);
+        if ($this->apiSecret === '') {
+            Log::error('LigdiCash: api_secret non configure — callback refuse (fail-closed)');
 
-                return false;
-            }
+            return false;
+        }
+
+        if ($rawBody === null || $signatureHeader === null) {
+            Log::warning('LigdiCash callback sans signature — refuse');
+
+            return false;
+        }
+
+        $expected = hash_hmac('sha256', $rawBody, $this->apiSecret);
+        if (! hash_equals($expected, $signatureHeader)) {
+            Log::warning('LigdiCash callback signature mismatch', [
+                'expected_prefix' => substr($expected, 0, 8),
+            ]);
+
+            return false;
         }
 
         return true;
+    }
+
+    public function confirmTransaction(?string $token): string
+    {
+        if (! $token) {
+            return 'unknown';
+        }
+
+        $response = $this->checkStatus($token);
+        $raw = $response['status'] ?? $response['response_code'] ?? null;
+
+        if ($raw === null || strtolower((string) $raw) === 'unknown') {
+            return 'unknown';
+        }
+
+        return $this->normalizeStatus((string) $raw);
     }
 
     /**

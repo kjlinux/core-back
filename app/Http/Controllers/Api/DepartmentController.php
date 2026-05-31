@@ -37,7 +37,7 @@ class DepartmentController extends BaseApiController
         });
 
         $perPage = (int) $request->input('per_page', 15);
-        $departments = $query->paginate($perPage);
+        $departments = $query->orderByDesc('created_at')->paginate($perPage);
 
         return $this->paginatedResponse(DepartmentResource::collection($departments));
     }

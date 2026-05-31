@@ -51,7 +51,7 @@ class CompanyController extends BaseApiController
 
         $perPage = (int) $request->input('per_page', 15);
 
-        return $this->paginatedResponse(CompanyResource::collection($query->paginate($perPage)));
+        return $this->paginatedResponse(CompanyResource::collection($query->orderByDesc('created_at')->paginate($perPage)));
     }
 
     /**
@@ -88,11 +88,28 @@ class CompanyController extends BaseApiController
 
     /**
      * Update an existing company.
+     * super_admin and technicien may update any company; admin_enterprise only its own.
+     * The subscription plan can only be changed by super_admin/technicien (warranty-gated
+     * billing), never self-upgraded by an admin_enterprise.
      */
     public function update(UpdateCompanyRequest $request, string $id): JsonResponse
     {
+        $user = auth()->user();
+
+        if (! $user->isSuperAdmin() && ! $user->isTechnicien()) {
+            if ((string) $user->company_id !== (string) $id) {
+                return $this->errorResponse('Accès non autorisé', 403);
+            }
+        }
+
+        $data = $request->validated();
+
+        if (! $user->isSuperAdmin() && ! $user->isTechnicien()) {
+            unset($data['subscription']);
+        }
+
         $company = Company::findOrFail($id);
-        $company->update($request->validated());
+        $company->update($data);
 
         return $this->resourceResponse(new CompanyResource($company), 'Entreprise mise à jour avec succès');
     }

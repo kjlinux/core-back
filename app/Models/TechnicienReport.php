@@ -23,9 +23,9 @@ class TechnicienReport extends Model
     ];
 
     protected $casts = [
-        'payload'      => 'array',
+        'payload' => 'array',
         'global_score' => 'integer',
-        'signed_at'    => 'datetime',
+        'signed_at' => 'datetime',
     ];
 
     public function user(): BelongsTo
@@ -59,12 +59,15 @@ class TechnicienReport extends Model
                 ksort($value);
                 $parts = [];
                 foreach ($value as $k => $v) {
-                    $parts[] = json_encode($k) . ':' . self::canonicalize($v);
+                    $parts[] = json_encode($k).':'.self::canonicalize($v);
                 }
-                return '{' . implode(',', $parts) . '}';
+
+                return '{'.implode(',', $parts).'}';
             }
-            return '[' . implode(',', array_map([self::class, 'canonicalize'], $value)) . ']';
+
+            return '['.implode(',', array_map([self::class, 'canonicalize'], $value)).']';
         }
+
         return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 }

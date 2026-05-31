@@ -16,6 +16,7 @@ class PayrollConfig extends Model
         'default_payment_mode',
         'standard_daily_hours',
         'working_days_per_month',
+        'working_days_per_week',
         'payment_day',
         'lateness_deduction_enabled',
         'overtime_enabled',
@@ -23,12 +24,13 @@ class PayrollConfig extends Model
     ];
 
     protected $casts = [
-        'standard_daily_hours'      => 'integer',
-        'working_days_per_month'    => 'integer',
-        'payment_day'               => 'integer',
-        'lateness_deduction_enabled'=> 'boolean',
-        'overtime_enabled'          => 'boolean',
-        'overtime_rate'             => 'float',
+        'standard_daily_hours' => 'integer',
+        'working_days_per_month' => 'integer',
+        'working_days_per_week' => 'integer',
+        'payment_day' => 'integer',
+        'lateness_deduction_enabled' => 'boolean',
+        'overtime_enabled' => 'boolean',
+        'overtime_rate' => 'float',
     ];
 
     public function company(): BelongsTo

@@ -14,7 +14,7 @@ class FeelbackEntryController extends BaseApiController
         $query = FeelbackEntry::with(['device', 'site']);
 
         $user = $request->user();
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $activeCompanyId = $this->resolveActiveCompanyId();
             $query->whereHas('site', function ($q) use ($activeCompanyId) {
                 $q->where('company_id', $activeCompanyId);

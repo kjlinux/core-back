@@ -23,7 +23,7 @@ class ScheduledReportMail extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: $this->reportTitle . ' — ' . $this->periodLabel);
+        return new Envelope(subject: $this->reportTitle.' — '.$this->periodLabel);
     }
 
     public function content(): Content

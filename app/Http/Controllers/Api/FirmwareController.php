@@ -299,6 +299,21 @@ class FirmwareController extends BaseApiController
             ->when($request->input('status'), fn ($q, $v) => $q->where('status', $v))
             ->orderBy('started_at', 'desc');
 
+        // Cloisonnement multi-tenant : OtaUpdateLog n'a pas de company_id. Pour les roles non
+        // globaux, on restreint aux logs des terminaux (RFID + biometriques) de l'entreprise
+        // active afin d'empecher l'enumeration des logs d'autres entreprises.
+        $user = $request->user();
+        if ($user && ! $user->isSuperAdmin() && ! $user->isSupportIt()) {
+            $companyId = $this->resolveActiveCompanyId();
+            $rfidIds = RfidDevice::where('company_id', $companyId)->pluck('id')->all();
+            $bioIds = BiometricDevice::where('company_id', $companyId)->pluck('id')->all();
+
+            $query->where(function ($q) use ($rfidIds, $bioIds) {
+                $q->where(fn ($q2) => $q2->where('device_kind', 'rfid')->whereIn('device_id', $rfidIds))
+                    ->orWhere(fn ($q2) => $q2->where('device_kind', 'biometric')->whereIn('device_id', $bioIds));
+            });
+        }
+
         $logs = $query->paginate($request->input('per_page', 15));
 
         return $this->paginatedResponse(OtaUpdateLogResource::collection($logs));

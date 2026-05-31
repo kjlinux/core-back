@@ -89,6 +89,18 @@ class UserController extends BaseApiController
             return $this->errorResponse('Accès non autorisé', 403);
         }
 
+        // technicien : uniquement l'entreprise active (ou un autre technicien sans
+        // entreprise fixe), jamais un super_admin — meme scoping que index().
+        if ($authUser->isTechnicien()) {
+            $activeCompanyId = $this->resolveActiveCompanyId();
+            $allowed = ($user->company_id && (string) $user->company_id === (string) $activeCompanyId)
+                || ($user->role === 'technicien' && $user->company_id === null);
+
+            if ($user->role === 'super_admin' || ! $allowed) {
+                return $this->errorResponse('Accès non autorisé', 403);
+            }
+        }
+
         return $this->resourceResponse(new UserResource($user));
     }
 
@@ -111,7 +123,8 @@ class UserController extends BaseApiController
                 : $authUser->company_id;
         }
 
-        $plainPassword = $data['password'];
+        $plainPassword = $data['password'] ?? Str::random(12);
+        $data['password'] = $plainPassword;
         $data['name'] = $data['first_name'].' '.$data['last_name'];
 
         $user = User::create($data);

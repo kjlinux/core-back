@@ -2,8 +2,8 @@
 
 namespace App\Events;
 
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Events\Dispatchable;
@@ -42,11 +42,23 @@ class DeviceStatusUpdated implements ShouldBroadcastNow
     }
 
     /**
-     * @return array<int, Channel>
+     * Canaux PRIVES (cloisonnement multi-tenant) :
+     *  - devices.{companyId} : membres de l'entreprise concernee ;
+     *  - devices.all : flux global de supervision, reserve aux roles transverses
+     *    (support IT / super_admin / technicien) qui monitorent tout le parc.
+     *
+     * @return array<int, PrivateChannel>
      */
     public function broadcastOn(): array
     {
-        return [new Channel('devices')];
+        $channels = [new PrivateChannel('devices.all')];
+
+        $companyId = $this->data['companyId'] ?? null;
+        if ($companyId) {
+            $channels[] = new PrivateChannel('devices.'.$companyId);
+        }
+
+        return $channels;
     }
 
     public function broadcastAs(): string

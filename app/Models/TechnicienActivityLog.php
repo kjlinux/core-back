@@ -42,22 +42,28 @@ class TechnicienActivityLog extends Model
         ?array $metadata = null,
     ): void {
         $user = auth()->user();
-        if (!$user) return;
+        if (! $user) {
+            return;
+        }
 
         // On ne loggue que les actions des techniciens
-        if (!$user->isTechnicien()) return;
+        if (! $user->isTechnicien()) {
+            return;
+        }
 
         $companyId = request()->input('_company_id') ?? $user->company_id;
-        if (!$companyId) return;
+        if (! $companyId) {
+            return;
+        }
 
         static::create([
-            'technicien_id'  => $user->id,
-            'company_id'     => $companyId,
-            'action'         => $action,
-            'resource_type'  => $resourceType,
-            'resource_id'    => $resourceId,
+            'technicien_id' => $user->id,
+            'company_id' => $companyId,
+            'action' => $action,
+            'resource_type' => $resourceType,
+            'resource_id' => $resourceId,
             'resource_label' => $resourceLabel,
-            'metadata'       => $metadata,
+            'metadata' => $metadata,
         ]);
     }
 }

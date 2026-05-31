@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\Company;
+use App\Models\SubscriptionHistory;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Services\Subscription\SubscriptionService;
@@ -10,13 +12,12 @@ use Illuminate\Http\Request;
 
 class SubscriptionController extends BaseApiController
 {
-    public function __construct(protected SubscriptionService $service)
-    {
-    }
+    public function __construct(protected SubscriptionService $service) {}
 
     public function plans(): JsonResponse
     {
         $plans = SubscriptionPlan::where('is_active', true)->orderBy('sort_order')->get();
+
         return $this->successResponse($plans);
     }
 
@@ -36,6 +37,7 @@ class SubscriptionController extends BaseApiController
                 'is_active' => false,
                 'warranty_ends_at' => null,
                 'is_warranty_active' => false,
+                'features' => [],
             ]);
         }
 
@@ -49,7 +51,27 @@ class SubscriptionController extends BaseApiController
             'is_active' => $company->isSubscriptionActive(),
             'warranty_ends_at' => $company->warranty_ends_at,
             'is_warranty_active' => $company->isWarrantyActive(),
+            // Liste des features effectivement disponibles (tient compte de l'expiration) :
+            // source de verite unique pour le gating frontend.
+            'features' => $this->resolveCurrentFeatures($company),
         ]);
+    }
+
+    /**
+     * Features effectivement disponibles pour la compagnie : un plan paye expire retombe sur freemium.
+     *
+     * @return array<int, string>
+     */
+    protected function resolveCurrentFeatures(Company $company): array
+    {
+        $code = $company->subscription;
+        if ($code !== SubscriptionPlan::FREEMIUM && ! $company->isSubscriptionActive()) {
+            $code = SubscriptionPlan::FREEMIUM;
+        }
+
+        $plan = SubscriptionPlan::where('code', $code)->first();
+
+        return $plan ? array_values((array) $plan->features) : [];
     }
 
     public function subscribe(Request $request): JsonResponse
@@ -57,6 +79,10 @@ class SubscriptionController extends BaseApiController
         $data = $request->validate(['plan_code' => 'required|in:freemium,garantie,premium']);
         $user = $request->user();
         $company = $user->company;
+
+        if (! $company) {
+            return $this->errorResponse('Aucune entreprise associée.', 422);
+        }
 
         try {
             $result = $this->service->subscribe($company, $data['plan_code'], $user);
@@ -71,11 +97,32 @@ class SubscriptionController extends BaseApiController
         ]);
     }
 
+    /**
+     * Devis autoritatif du montant a debiter pour un changement de plan, calcule cote
+     * serveur (meme chemin que subscribe/upgrade) afin que l'affichage corresponde
+     * exactement au montant preleve.
+     */
+    public function quote(Request $request): JsonResponse
+    {
+        $data = $request->validate(['plan_code' => 'required|in:freemium,garantie,premium']);
+        $company = $request->user()->company;
+
+        if (! $company) {
+            return $this->errorResponse('Aucune entreprise associee.', 422);
+        }
+
+        return $this->successResponse($this->service->quote($company, $data['plan_code']));
+    }
+
     public function upgrade(Request $request): JsonResponse
     {
         $data = $request->validate(['plan_code' => 'required|in:freemium,garantie,premium']);
         $user = $request->user();
         $company = $user->company;
+
+        if (! $company) {
+            return $this->errorResponse('Aucune entreprise associée.', 422);
+        }
 
         try {
             $result = $this->service->upgrade($company, $data['plan_code'], $user);
@@ -96,6 +143,10 @@ class SubscriptionController extends BaseApiController
         $user = $request->user();
         $company = $user->company;
 
+        if (! $company) {
+            return $this->errorResponse('Aucune entreprise associée.', 422);
+        }
+
         try {
             $result = $this->service->payNextPeriod($company, $user);
         } catch (\Throwable $e) {
@@ -113,9 +164,34 @@ class SubscriptionController extends BaseApiController
     {
         $user = $request->user();
         $company = $user->company;
+
+        if (! $company) {
+            return $this->errorResponse('Aucune entreprise associée.', 422);
+        }
+
         $payments = SubscriptionPayment::where('company_id', $company->id)
             ->orderByDesc('created_at')
             ->paginate(20);
+
         return $this->paginatedResponse($payments);
+    }
+
+    /**
+     * Historique des evenements d'abonnement (souscription, upgrade, downgrade, renouvellement,
+     * prepaiement, rollover, expiration, changement admin), au-dela des seuls paiements.
+     */
+    public function events(Request $request): JsonResponse
+    {
+        $company = $request->user()->company;
+
+        if (! $company) {
+            return $this->errorResponse('Aucune entreprise associée.', 422);
+        }
+
+        $events = SubscriptionHistory::where('company_id', $company->id)
+            ->orderByDesc('created_at')
+            ->paginate(20);
+
+        return $this->paginatedResponse($events);
     }
 }

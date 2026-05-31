@@ -22,7 +22,7 @@ class LatenessRule extends Model
     protected $casts = [
         'tolerance_minutes' => 'integer',
         'minutes_threshold' => 'integer',
-        'penalty_value'     => 'float',
+        'penalty_value' => 'float',
     ];
 
     public function company(): BelongsTo

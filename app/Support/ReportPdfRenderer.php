@@ -11,9 +11,9 @@ use Barryvdh\DomPDF\Facade\Pdf;
 class ReportPdfRenderer
 {
     /**
-     * @param array<int,string> $headers
-     * @param array<int,array<int,string|int|float|null>> $rows
-     * @param array<int,array{label:string,value:string|int|float}> $summary
+     * @param  array<int,string>  $headers
+     * @param  array<int,array<int,string|int|float|null>>  $rows
+     * @param  array<int,array{label:string,value:string|int|float}>  $summary
      */
     public static function render(
         string $title,
@@ -23,11 +23,11 @@ class ReportPdfRenderer
         string $subtitle = '',
     ): \Barryvdh\DomPDF\PDF {
         return Pdf::loadView('reports.generic', [
-            'title'    => $title,
+            'title' => $title,
             'subtitle' => $subtitle,
-            'headers'  => $headers,
-            'rows'     => $rows,
-            'summary'  => $summary,
+            'headers' => $headers,
+            'rows' => $rows,
+            'summary' => $summary,
         ])->setPaper('a4', 'portrait');
     }
 }

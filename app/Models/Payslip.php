@@ -36,21 +36,21 @@ class Payslip extends Model
     ];
 
     protected $casts = [
-        'period_start'           => 'date',
-        'period_end'             => 'date',
-        'worked_days'            => 'integer',
-        'worked_hours'           => 'float',
-        'absent_days'            => 'integer',
+        'period_start' => 'date',
+        'period_end' => 'date',
+        'worked_days' => 'integer',
+        'worked_hours' => 'float',
+        'absent_days' => 'integer',
         'total_lateness_minutes' => 'integer',
-        'overtime_hours'         => 'float',
-        'overtime_amount'        => 'integer',
-        'lateness_deduction'     => 'integer',
-        'absence_deduction'      => 'integer',
-        'lines'                  => 'array',
-        'gross_amount'           => 'integer',
-        'net_amount'             => 'integer',
-        'base_salary'            => 'integer',
-        'generated_at'           => 'datetime',
+        'overtime_hours' => 'float',
+        'overtime_amount' => 'integer',
+        'lateness_deduction' => 'integer',
+        'absence_deduction' => 'integer',
+        'lines' => 'array',
+        'gross_amount' => 'integer',
+        'net_amount' => 'integer',
+        'base_salary' => 'integer',
+        'generated_at' => 'datetime',
     ];
 
     public function employee(): BelongsTo

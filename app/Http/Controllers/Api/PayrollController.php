@@ -8,9 +8,11 @@ use App\Http\Requests\Payroll\SavePayrollConfigRequest;
 use App\Http\Resources\LatenessRuleResource;
 use App\Http\Resources\PayrollConfigResource;
 use App\Http\Resources\PayslipResource;
+use App\Models\Employee;
 use App\Models\LatenessRule;
 use App\Models\PayrollConfig;
 use App\Models\Payslip;
+use App\Services\EmployeeNotificationService;
 use App\Services\PayrollService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +20,10 @@ use Illuminate\Support\Facades\DB;
 
 class PayrollController extends BaseApiController
 {
-    public function __construct(private PayrollService $payrollService) {}
+    public function __construct(
+        private PayrollService $payrollService,
+        private EmployeeNotificationService $employeeNotifications,
+    ) {}
 
     // =========================================================================
     // CONFIGURATION
@@ -139,6 +144,28 @@ class PayrollController extends BaseApiController
             departmentId: $request->input('department_id'),
         );
 
+        foreach ($payslips as $payslip) {
+            if (! $payslip->wasRecentlyCreated) {
+                continue;
+            }
+
+            $payslip->loadMissing('employee');
+
+            if ($payslip->employee) {
+                $this->employeeNotifications->notifyEmployee(
+                    $payslip->employee,
+                    'payslip',
+                    'Fiche de paie en préparation',
+                    "Votre fiche de paie pour la période {$payslip->period} a été générée. Elle sera disponible après validation.",
+                    [
+                        'payslipId' => (string) $payslip->id,
+                        'period' => $payslip->period,
+                    ],
+                    broadcast: false,
+                );
+            }
+        }
+
         return $this->successResponse(
             PayslipResource::collection($payslips),
             $payslips->count().' fiche(s) de paie générée(s)'
@@ -198,6 +225,20 @@ class PayrollController extends BaseApiController
         $payslip->update(['status' => 'validated']);
         $payslip->load(['employee', 'company', 'site', 'department']);
 
+        if ($payslip->employee) {
+            $this->employeeNotifications->notifyEmployee(
+                $payslip->employee,
+                'payslip',
+                'Nouvelle fiche de paie disponible',
+                "Votre fiche de paie pour la période {$payslip->period} est disponible.",
+                [
+                    'payslipId' => (string) $payslip->id,
+                    'period' => $payslip->period,
+                ],
+                sendEmail: true,
+            );
+        }
+
         return $this->resourceResponse(new PayslipResource($payslip), 'Fiche de paie validée');
     }
 
@@ -214,18 +255,31 @@ class PayrollController extends BaseApiController
     {
         $user = $request->user();
 
-        $isPrivileged = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        $isPrivileged = $isPrivileged
-            || $user->role === 'super_admin'
-            || $user->role === 'admin_enterprise';
+        // Employee porte le trait BelongsToCompany : pour un admin_enterprise, un employe
+        // d'une autre entreprise est invisible (find renvoie null -> 404). super_admin et
+        // support_it ont un scope global, d'ou la verification explicite ci-dessous.
+        $employee = Employee::find($employeeId);
+        if (! $employee) {
+            return $this->errorResponse('Employé introuvable', 404);
+        }
 
-        if (! $isPrivileged) {
+        $isPrivileged = $user->role === 'super_admin' || $user->role === 'admin_enterprise';
+
+        if ($isPrivileged) {
+            // Un role privilegie reste cantonne a sa propre entreprise (super_admin : toutes).
+            if (! $this->authorizeCompanyAccess((string) $employee->company_id)) {
+                return $this->errorResponse('Accès non autorisé', 403);
+            }
+        } else {
             $ownEmployeeId = (string) ($user->employee_id ?? '');
             abort_if($ownEmployeeId === '' || $ownEmployeeId !== (string) $employeeId, 403, 'Acces interdit a ces fiches de paie');
         }
 
+        // Payslip n'a pas de global scope company : on filtre explicitement sur l'entreprise
+        // de l'employe pour eviter toute fuite inter-entreprise.
         $payslips = Payslip::with(['employee', 'company', 'site', 'department'])
             ->where('employee_id', $employeeId)
+            ->where('company_id', $employee->company_id)
             ->orderByDesc('period')
             ->get();
 

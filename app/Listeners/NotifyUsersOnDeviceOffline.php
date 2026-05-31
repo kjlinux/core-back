@@ -68,7 +68,7 @@ class NotifyUsersOnDeviceOffline implements ShouldHandleEventsAfterCommit
 
                 event(new NotificationReceived($notification));
             } catch (\Throwable $e) {
-                Log::warning('[NotifyUsersOnDeviceOffline] echec pour user ' . $user->id . ' : ' . $e->getMessage());
+                Log::warning('[NotifyUsersOnDeviceOffline] echec pour user '.$user->id.' : '.$e->getMessage());
             }
         }
     }

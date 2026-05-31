@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\LigdiCashService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use InvalidArgumentException;
 use RuntimeException;
@@ -87,11 +88,66 @@ class SubscriptionService
         }
 
         // Upgrade : prorata
-        $daysRemaining = max(1, (int) ceil(now()->diffInDays(CarbonImmutable::parse($company->subscription_expires_at), false)));
-        $daysRemaining = min($daysRemaining, 30);
+        $daysRemaining = $this->prorataDaysRemaining($company);
         $amount = (int) round(($newPlan->monthly_price_xof - $currentPlan->monthly_price_xof) * $daysRemaining / 30);
 
         return $this->createPayment($company, $newPlan, $amount, true, $actor);
+    }
+
+    /**
+     * Devis (lecture seule) du montant qui serait debite pour un changement de plan, calcule
+     * par le MEME chemin que upgrade()/subscribe(). Source de verite affichee au client, pour
+     * eviter toute divergence avec un calcul cote frontend.
+     *
+     * @return array{amount_xof: int, days_remaining: int, is_prorata: bool}
+     */
+    public function quote(Company $company, string $planCode): array
+    {
+        $newPlan = $this->resolvePlan($planCode);
+
+        if ($newPlan->code === SubscriptionPlan::FREEMIUM) {
+            return ['amount_xof' => 0, 'days_remaining' => 0, 'is_prorata' => false];
+        }
+
+        // Pas d'abonnement actif -> souscription neuve au plein tarif.
+        if (! $company->isSubscriptionActive()) {
+            return ['amount_xof' => $newPlan->monthly_price_xof, 'days_remaining' => 30, 'is_prorata' => false];
+        }
+
+        $currentPlan = $this->resolvePlan($company->subscription);
+
+        // Meme plan ou downgrade -> aucun paiement immediat (applique en fin de cycle).
+        if ($newPlan->monthly_price_xof <= $currentPlan->monthly_price_xof) {
+            return ['amount_xof' => 0, 'days_remaining' => 0, 'is_prorata' => false];
+        }
+
+        $daysRemaining = $this->prorataDaysRemaining($company);
+        $amount = (int) round(($newPlan->monthly_price_xof - $currentPlan->monthly_price_xof) * $daysRemaining / 30);
+
+        return ['amount_xof' => $amount, 'days_remaining' => $daysRemaining, 'is_prorata' => true];
+    }
+
+    /**
+     * Jours restants servant d'assiette au prorata, bornes a [1, 30].
+     */
+    protected function prorataDaysRemaining(Company $company): int
+    {
+        // Garde défensive : sans date d'expiration valide ou si déjà expiré, aucun
+        // jour de prorata (0). Évite de masquer silencieusement une date passée en
+        // « 1 jour » (sous-facturation). Cas normal (abonnement actif, date future)
+        // inchangé : borné à [1, 30].
+        if (! $company->subscription_expires_at) {
+            return 0;
+        }
+
+        $expiresAt = CarbonImmutable::parse($company->subscription_expires_at);
+        if ($expiresAt->isPast()) {
+            return 0;
+        }
+
+        $days = (int) ceil(now()->diffInDays($expiresAt, false));
+
+        return max(1, min($days, 30));
     }
 
     /**
@@ -123,6 +179,23 @@ class SubscriptionService
 
             $now = CarbonImmutable::now();
             $newPlanCode = $payment->to_plan;
+
+            // Le paiement a deja eu lieu : on n'annule jamais l'activation ici (sinon on
+            // encaisserait sans livrer le service) — la garantie a ete validee a la
+            // souscription. Mais si elle n'est plus active (revoquee entre l'initiation et
+            // le webhook), on escalade en erreur ET on consigne une note auditable dans
+            // l'historique d'abonnement pour que l'equipe regularise (au lieu d'un simple log).
+            $warrantyNote = null;
+            $plan = SubscriptionPlan::where('code', $newPlanCode)->first();
+            if ($plan && $plan->requires_warranty && ! $company->isWarrantyActive()) {
+                $warrantyNote = 'Active sans garantie materielle active (revoquee apres initiation) — a regulariser.';
+                Log::error('Abonnement active alors que la garantie materielle requise est inactive', [
+                    'company_id' => $company->id,
+                    'plan' => $newPlanCode,
+                    'payment_id' => $payment->id,
+                ]);
+            }
+
             $isPrepaid = $payment->is_prorata === false
                 && $company->isSubscriptionActive()
                 && $company->subscription === $newPlanCode;
@@ -161,6 +234,7 @@ class SubscriptionService
                 'to_plan' => $payment->to_plan,
                 'payment_id' => $payment->id,
                 'actor_user_id' => $payment->triggered_by_user_id,
+                'notes' => $warrantyNote,
                 'created_at' => $now,
             ]);
 
@@ -278,24 +352,31 @@ class SubscriptionService
     {
         // Anti-doublon : empeche un second paiement tant qu'un precedent est en attente
         // (ex : double-clic, ou paiement initie non finalise). On laisse 30 min de fenetre.
-        $existingPending = SubscriptionPayment::where('company_id', $company->id)
-            ->where('payment_status', SubscriptionPayment::STATUS_PENDING)
-            ->where('created_at', '>', now()->subMinutes(30))
-            ->first();
-        if ($existingPending) {
-            throw new RuntimeException('Un paiement est déjà en cours. Veuillez le finaliser ou patienter quelques minutes.');
-        }
+        // Le controle + la creation sont atomiques sous un verrou par entreprise pour eviter
+        // que deux requetes concurrentes ne creent chacune un paiement en attente. L'appel
+        // HTTP a la passerelle (plus bas) reste HORS transaction pour ne pas tenir le verrou.
+        $payment = DB::transaction(function () use ($company, $toPlan, $amount, $isProrata, $actor) {
+            Company::whereKey($company->id)->lockForUpdate()->first();
 
-        $payment = SubscriptionPayment::create([
-            'company_id' => $company->id,
-            'from_plan' => $company->subscription,
-            'to_plan' => $toPlan->code,
-            'amount_xof' => $amount,
-            'is_prorata' => $isProrata,
-            'payment_status' => SubscriptionPayment::STATUS_PENDING,
-            'triggered_by_user_id' => $actor?->id,
-            'triggered_by_superadmin' => $actor?->role === 'super_admin',
-        ]);
+            $existingPending = SubscriptionPayment::where('company_id', $company->id)
+                ->where('payment_status', SubscriptionPayment::STATUS_PENDING)
+                ->where('created_at', '>', now()->subMinutes(30))
+                ->first();
+            if ($existingPending) {
+                throw new RuntimeException('Un paiement est déjà en cours. Veuillez le finaliser ou patienter quelques minutes.');
+            }
+
+            return SubscriptionPayment::create([
+                'company_id' => $company->id,
+                'from_plan' => $company->subscription,
+                'to_plan' => $toPlan->code,
+                'amount_xof' => $amount,
+                'is_prorata' => $isProrata,
+                'payment_status' => SubscriptionPayment::STATUS_PENDING,
+                'triggered_by_user_id' => $actor?->id,
+                'triggered_by_superadmin' => $actor?->role === 'super_admin',
+            ]);
+        });
 
         if ($amount <= 0) {
             // Cas limite : upgrade sans cout (jamais en theorie, mais on protege)

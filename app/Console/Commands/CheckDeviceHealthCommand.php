@@ -15,6 +15,7 @@ use Illuminate\Console\Command;
 class CheckDeviceHealthCommand extends Command
 {
     protected $signature = 'health:check-devices {--threshold= : Minutes before marking offline (overrides config)}';
+
     protected $description = 'Check device heartbeats, mark offline ones, and emit alerts';
 
     public function handle(AlertService $alerts, HealthService $health): int
@@ -36,12 +37,14 @@ class CheckDeviceHealthCommand extends Command
                 foreach ($component as $subName => $subComponent) {
                     $this->processComponent("listeners.{$subName}", $subComponent, $alerts);
                 }
+
                 continue;
             }
             $this->processComponent($name, $component, $alerts);
         }
 
         $this->info('Health check completed.');
+
         return self::SUCCESS;
     }
 
@@ -69,8 +72,8 @@ class CheckDeviceHealthCommand extends Command
                 'device_kind' => $kind,
                 'type' => DeviceAlert::TYPE_OFFLINE_THRESHOLD,
                 'severity' => $device->is_witness ? DeviceAlert::SEVERITY_CRITICAL : DeviceAlert::SEVERITY_HIGH,
-                'title' => "Capteur {$kind} hors ligne : " . ($device->name ?? $device->serial_number ?? $device->id),
-                'message' => "Aucun signal depuis plus que le seuil. Dernier contact: " . ($device->{$timeColumn}?->locale('fr')->diffForHumans() ?? 'inconnu'),
+                'title' => "Capteur {$kind} hors ligne : ".($device->name ?? $device->serial_number ?? $device->id),
+                'message' => 'Aucun signal depuis plus que le seuil. Dernier contact: '.($device->{$timeColumn}?->locale('fr')->diffForHumans() ?? 'inconnu'),
                 'context' => [
                     'serial_number' => $device->serial_number ?? null,
                     'last_seen' => $device->{$timeColumn}?->toISOString(),
@@ -85,7 +88,7 @@ class CheckDeviceHealthCommand extends Command
         try {
             $fn();
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('[health:check-devices] broadcast échoué (serveur temps réel injoignable ?): ' . $e->getMessage());
+            \Illuminate\Support\Facades\Log::warning('[health:check-devices] broadcast échoué (serveur temps réel injoignable ?): '.$e->getMessage());
         }
     }
 

@@ -33,15 +33,14 @@ class CreateNotificationOnFeelback implements ShouldHandleEventsAfterCommit
 
         $companyId = $entry->device->company_id ?? null;
 
+        // Cloisonnement multi-tenant : uniquement les admins/managers de l'entreprise du
+        // capteur. Les super_admin ne sont pas notifies (sinon flux de toutes les societes).
         $users = collect();
         if ($companyId) {
             $users = User::where('company_id', $companyId)
                 ->whereIn('role', ['admin_enterprise', 'manager'])
                 ->get();
         }
-
-        $superAdmins = User::where('role', 'super_admin')->get();
-        $users = $users->merge($superAdmins);
 
         foreach ($users as $user) {
             $notification = AppNotification::create([
