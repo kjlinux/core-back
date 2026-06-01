@@ -32,6 +32,9 @@ class Employee extends Model
         'biometric_enrolled',
         'payment_mode',
         'base_salary',
+        'device_fingerprint',
+        'device_info',
+        'device_enrolled_at',
     ];
 
     protected $casts = [
