@@ -172,6 +172,16 @@ class UserController extends BaseApiController
             $data['name'] = ($data['first_name'] ?? $user->first_name).' '.($data['last_name'] ?? $user->last_name);
         }
 
+        // Changement manuel du mot de passe : réservé au super_admin et au technicien.
+        // Un champ vide ne touche pas au mot de passe existant.
+        if (array_key_exists('password', $data)) {
+            if (! $authUser->isSuperAdmin() && ! $authUser->isTechnicien()) {
+                unset($data['password']);
+            } elseif (blank($data['password'])) {
+                unset($data['password']);
+            }
+        }
+
         $user->update($data);
         $user->load('company');
 

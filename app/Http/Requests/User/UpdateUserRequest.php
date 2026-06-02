@@ -22,6 +22,7 @@ class UpdateUserRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:20'],
             'role' => ['sometimes', 'string', 'in:super_admin,admin_enterprise,manager,technicien,support_it,employe'],
             'company_id' => ['nullable', 'exists:companies,id'],
+            'password' => ['sometimes', 'nullable', 'string', 'min:8', 'confirmed'],
         ];
     }
 }

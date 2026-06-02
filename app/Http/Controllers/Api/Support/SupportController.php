@@ -491,6 +491,36 @@ class SupportController extends BaseApiController
     }
 
     /**
+     * Définition manuelle d'un mot de passe pour un utilisateur (saisi par le support).
+     * Les sessions de l'utilisateur sont révoquées pour forcer une reconnexion.
+     */
+    public function setUserPassword(Request $request, string $userId): JsonResponse
+    {
+        $validated = $request->validate([
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $user = User::query()->find($userId);
+        if (! $user) {
+            return $this->errorResponse('Utilisateur introuvable', 404);
+        }
+        if ($user->role === 'super_admin') {
+            return $this->errorResponse('Action non autorisée sur un super administrateur', 403);
+        }
+
+        $user->update(['password' => Hash::make($validated['password'])]);
+        $user->tokens()->delete();
+
+        Log::info('[Support] définition manuelle du mot de passe utilisateur', [
+            'support_user_id' => auth()->id(),
+            'target_user_id' => $user->id,
+            'company_id' => $user->company_id,
+        ]);
+
+        return $this->successResponse(['userId' => $user->id]);
+    }
+
+    /**
      * Prise de contrôle d'une entreprise : émet un token agissant comme son compte
      * administrateur (admin_enterprise actif le plus ancien).
      */

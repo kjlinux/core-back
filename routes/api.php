@@ -493,6 +493,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/companies/{id}', [SupportController::class, 'companyDetail']);
         Route::post('/companies/{id}/impersonate', [SupportController::class, 'impersonateCompany']);
         Route::post('/users/{id}/reset-password', [SupportController::class, 'resetUserPassword']);
+        Route::post('/users/{id}/set-password', [SupportController::class, 'setUserPassword']);
         Route::post('/users/{id}/impersonate', [SupportController::class, 'impersonateUser']);
         Route::get('/witnesses', [SupportController::class, 'listWitnesses']);
         Route::post('/witnesses/{kind}/{id}', [SupportController::class, 'markWitness']);
