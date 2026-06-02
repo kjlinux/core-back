@@ -195,12 +195,19 @@ class EnrollmentController extends BaseApiController
         }
     }
 
-    public function destroy(Request $request, string $id): JsonResponse
+    public function destroy(Request $request, string $id, MqttService $mqtt): JsonResponse
     {
         $enrollment = FingerprintEnrollment::findOrFail($id);
         $employeeId = $enrollment->employee_id;
         $wasEnrolled = $enrollment->status === 'enrolled';
         $deviceId = $enrollment->device_id;
+
+        // Libérer le slot dans la flash du capteur AS608 AVANT de supprimer la ligne DB.
+        // Sans ce DELETE, le template reste stocké côté terminal alors que le slot est
+        // réattribué côté DB : le firmware refuse alors tout nouvel enrôlement sur ce slot
+        // avec « Slot AS608 deja utilise ». Best-effort : un échec broker n'empêche pas
+        // la suppression DB.
+        $this->sendDeleteToDevice($mqtt, $enrollment);
 
         BiometricAuditLog::create([
             'user_id' => $request->user()->id,
@@ -222,6 +229,39 @@ class EnrollmentController extends BaseApiController
         }
 
         return $this->noContentResponse();
+    }
+
+    /**
+     * Publie la commande DELETE (0x2000B0) au terminal pour effacer le template
+     * du slot AS608 correspondant a l'enrollment. Best-effort : toute erreur
+     * (broker indisponible, topic manquant, hash non parseable) est ignoree pour
+     * ne pas bloquer la suppression cote application.
+     */
+    private function sendDeleteToDevice(MqttService $mqtt, FingerprintEnrollment $enrollment): void
+    {
+        if (! preg_match('/^FP(\d{1,4})$/', (string) $enrollment->template_hash, $m)) {
+            return;
+        }
+
+        $device = BiometricDevice::find($enrollment->device_id);
+        if (! $device || ! $device->mqtt_topic) {
+            return;
+        }
+
+        $payload = json_encode([
+            'command' => config('mqtt.command_codes.biometric.DELETE', 'DELETE'),
+            'device_id' => $device->id,
+            'device_type' => 'biometric',
+            'enrollment_id' => $enrollment->id,
+            'finger_id' => (int) $m[1],
+            'timestamp' => now()->toISOString(),
+        ]);
+
+        try {
+            $mqtt->publish($mqtt->getResponseTopic($device->mqtt_topic), $payload);
+        } catch (\Exception $e) {
+            report($e);
+        }
     }
 
     /**
