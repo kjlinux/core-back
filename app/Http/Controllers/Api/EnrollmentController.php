@@ -102,8 +102,12 @@ class EnrollmentController extends BaseApiController
             return $this->errorResponse('Le terminal n\'a pas de topic MQTT configuré', 422);
         }
 
-        if (! $device->is_online) {
-            return $this->errorResponse('Le terminal est hors ligne', 422);
+        // Ne pas bloquer sur un is_online potentiellement perime : tant que le firmware
+        // n'emet pas de heartbeat regulier, un terminal allume mais inactif > 5 min est
+        // marque offline a tort. On ne refuse donc que les terminaux jamais vus en ligne ;
+        // sinon on tente l'envoi et le front gere le timeout si le capteur ne repond pas.
+        if (! $device->is_online && ! $device->last_sync_at) {
+            return $this->errorResponse('Le terminal n\'a jamais été vu en ligne', 422);
         }
 
         // Réutiliser un enrollment pending existant pour éviter l'accumulation de slots bloqués

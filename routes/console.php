@@ -10,6 +10,7 @@ Artisan::command('inspire', function () {
 
 Schedule::command('health:check-devices')->everyMinute()->withoutOverlapping();
 Schedule::command('firmware:fail-stuck-ota')->everyMinute()->withoutOverlapping();
+Schedule::command('biometric:prune-stuck-enrollments')->everyFiveMinutes()->withoutOverlapping();
 
 Schedule::command('support:check-prolonged-offline')->dailyAt('07:30')->withoutOverlapping();
 

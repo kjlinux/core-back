@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Events\AttendanceRecorded;
-use App\Events\DeviceStatusUpdated;
 use App\Models\AttendanceRecord;
 use App\Models\BiometricAuditLog;
 use App\Models\BiometricDevice;
@@ -127,19 +126,13 @@ class MqttListenBiometricCommand extends Command
             return;
         }
 
-        // Mark online et relancer une OTA en attente si le terminal se reconnecte
+        // Mark online et relancer une OTA en attente si le terminal se reconnecte.
+        // Le firmware reporte sa version sous "version" ; markOnlineAndRetryOta attend "firmware_version".
         if ($device) {
-            $this->markOnlineAndRetryOta($device, $data);
-        }
-
-        // Handle status action (device deja marque online + retry OTA ci-dessus)
-        if (isset($data['action']) && $data['action'] === 'status') {
-            $this->info("Status update du capteur {$serialNumber}");
-            if ($device) {
-                event(new DeviceStatusUpdated('biometric', (string) $device->id, 'online', $data));
+            if (! empty($data['version']) && empty($data['firmware_version'])) {
+                $data['firmware_version'] = $data['version'];
             }
-
-            return;
+            $this->markOnlineAndRetryOta($device, $data);
         }
 
         // Handle enrollment response from device
@@ -156,11 +149,23 @@ class MqttListenBiometricCommand extends Command
             return;
         }
 
-        // Handle fingerprint scan
+        // Handle fingerprint scan : un vrai pointage porte TOUJOURS template_hash.
+        // Sans template_hash, c'est un message de statut/heartbeat ({"status":"online"}
+        // ou reponse a STATUS) : le terminal est deja marque online ci-dessus, il n'y a
+        // aucun pointage a creer et SURTOUT aucune reponse "rejected" a renvoyer, sinon
+        // le capteur bipe et affiche "refuse" a chaque battement de coeur / reconnexion.
         $templateHash = $data['template_hash'] ?? null;
         if (! $templateHash) {
-            $this->warn('template_hash manquant');
-            $this->mqtt->publish($responseTopic, config('mqtt.response_codes.rejected'), MqttClient::QOS_AT_LEAST_ONCE);
+            $this->info("Message de statut/heartbeat du capteur {$serialNumber}");
+
+            return;
+        }
+
+        // Un capteur non enregistre ne doit jamais resoudre un template_hash globalement :
+        // un meme FP0001 existe sur plusieurs terminaux, on attribuerait le pointage au
+        // mauvais employe. Serial inconnu => on ignore (et on ne marque rien online plus haut).
+        if (! $device) {
+            $this->warn("Capteur inconnu (serial {$serialNumber}) : pointage ignore");
 
             return;
         }
@@ -168,7 +173,7 @@ class MqttListenBiometricCommand extends Command
         // Scoper par device : un meme template_hash (FP0001) peut exister sur
         // plusieurs terminaux. Sans ce scope, first() retourne le mauvais employe.
         $enrollment = FingerprintEnrollment::where('template_hash', $templateHash)
-            ->when($device, fn ($q) => $q->where('device_id', $device->id))
+            ->where('device_id', $device->id)
             ->where('status', 'enrolled')
             ->first();
 
