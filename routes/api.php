@@ -124,6 +124,16 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // =============================================
+    // Fiches de maintenance (technicien + super_admin)
+    // =============================================
+    Route::middleware('role:super_admin,technicien')->group(function () {
+        Route::get('/maintenance-sheets', [\App\Http\Controllers\Api\MaintenanceSheetController::class, 'index']);
+        Route::get('/maintenance-sheets/{id}/pdf', [\App\Http\Controllers\Api\MaintenanceSheetController::class, 'pdf']);
+        Route::get('/maintenance-sheets/{id}', [\App\Http\Controllers\Api\MaintenanceSheetController::class, 'show']);
+        Route::post('/maintenance-sheets', [\App\Http\Controllers\Api\MaintenanceSheetController::class, 'store']);
+    });
+
+    // =============================================
     // CRM Followups J+2/J+7/J+30 — usage interne TANGA GROUP
     // (chargés de compte / commerciaux : super_admin + technicien)
     // Le client (admin_enterprise) ne doit PAS voir le suivi commercial le concernant.

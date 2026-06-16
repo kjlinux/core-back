@@ -10,7 +10,11 @@
       "mcp__laravel-boost__last-error",
       "mcp__laravel-boost__read-log-entries",
       "mcp__laravel-boost__tinker",
-      "mcp__laravel-boost__get-absolute-url"
+      "mcp__laravel-boost__get-absolute-url",
+      "Bash(ssh root@180.149.198.250*)",
+      "PowerShell(ssh root@180.149.198.250*)",
+      "Bash(scp * root@180.149.198.250:*)",
+      "Bash(scp root@180.149.198.250:*)"
     ]
   }
 }

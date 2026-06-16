@@ -14,6 +14,9 @@ Schedule::command('biometric:prune-stuck-enrollments')->everyFiveMinutes()->with
 
 Schedule::command('support:check-prolonged-offline')->dailyAt('07:30')->withoutOverlapping();
 
+// Sauvegarde quotidienne de la base envoyee par email (08:00, fuseau app = Africa/Abidjan).
+Schedule::command('db:backup-mail')->dailyAt('08:00')->withoutOverlapping()->runInBackground();
+
 Schedule::command('subscriptions:rollover-prepaid')->dailyAt('00:05')->withoutOverlapping();
 // Expiration juste apres le rollover des pre-paiements pour reduire la fenetre pendant
 // laquelle un abonnement techniquement expire reste marque actif en base.
